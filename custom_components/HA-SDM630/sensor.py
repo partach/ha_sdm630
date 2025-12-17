@@ -43,4 +43,4 @@ class SDM630Sensor(CoordinatorEntity, SensorEntity):  # ← Inherit from Coordin
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        return super().available and self.coordinator.data.get(self._key) is not Noneasync_write_ha_state)
+        return self.coordinator.last_update_success and self.coordinator.data.get(self._key) is not None
