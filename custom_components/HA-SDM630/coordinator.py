@@ -18,7 +18,7 @@ _LOGGER = logging.getLogger(__name__)
 class SDM630Coordinator(DataUpdateCoordinator):
     """SDM630 data coordinator using async Modbus client."""
 
-    def __init__(self, hass, port: str, slave_id: int, baudrate: int, update_interval: int = 10):
+    def __init__(self, hass, port: str, slave_id: int, baudrate: int):
         """Initialize the coordinator."""
         super().__init__(
             hass,
