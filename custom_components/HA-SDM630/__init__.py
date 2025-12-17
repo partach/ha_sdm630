@@ -16,7 +16,7 @@ from .const import (
 #    CONF_UPDATE_INTERVAL,
 #    DEFAULT_UPDATE_INTERVAL,
 )
-from .coordinator import SDM630Coordinator
+from .coordinator import HA_SDM630Coordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hub = hubs[hub_key]
 
-    coordinator = SDM630Coordinator(
+    coordinator = HA_SDM630Coordinator(
         hass,
         hub.client,  # ← Pass shared client
         config[CONF_SLAVE_ID],
