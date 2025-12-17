@@ -15,8 +15,7 @@ from .const import (
     CONF_BAUDRATE,
     CONF_REGISTER_SET,
     DEFAULT_REGISTER_SET,
-#    CONF_UPDATE_INTERVAL,
-#    DEFAULT_UPDATE_INTERVAL,
+    REGISTER_SETS,
 )
 from .coordinator import HA_SDM630Coordinator
 
@@ -26,71 +25,92 @@ PLATFORMS = [Platform.SENSOR]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up SDM630 from a config entry."""
     config = entry.data
 
     port = config[CONF_SERIAL_PORT]
     baudrate = config[CONF_BAUDRATE]
 
-    # Get or create shared hub for this port
+    # Get or create shared hub for this port + baudrate combination
     hubs = hass.data.setdefault(DOMAIN, {}).setdefault("hubs", {})
     hub_key = f"{port}_{baudrate}"
+
     if hub_key not in hubs:
         hubs[hub_key] = SDM630Hub(hass, port, baudrate)
 
     hub = hubs[hub_key]
+
+    # Determine which register set to use
     register_set = entry.options.get(CONF_REGISTER_SET, DEFAULT_REGISTER_SET)
     selected_registers = REGISTER_SETS[register_set]
+
+    # Create coordinator with shared client and selected registers
     coordinator = HA_SDM630Coordinator(
         hass,
-        hub.client,  # ← Pass shared client
-        config[CONF_SLAVE_ID], selected_registers
+        hub.client,
+        config[CONF_SLAVE_ID],
+        selected_registers,  # Pass the selected register map
     )
-    coordinator.config = config  # Save for later unload
-    coordinator.register_map = REGISTER_SETS[register_set]
+
+    # Store config for unload cleanup
+    coordinator.config = config
+
     # Test connection
     if not await coordinator.async_test_connection():
         raise ConfigEntryNotReady("Could not connect to SDM630")
 
+    # First data refresh
     await coordinator.async_config_entry_first_refresh()
 
+    # Store coordinator
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
+    # Forward to sensor platform
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    
     return True
 
-async def async_get_options_flow(config_entry):
+
+async def async_get_options_flow(config_entry: ConfigEntry):
+    """Return the options flow handler."""
     return OptionsFlowHandler(config_entry)
 
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unload_ok:
-        coordinator = hass.data[DOMAIN].pop(entry.entry_id)
+    if not unload_ok:
+        return False
 
-        # Clean up hub if no more entries use this port
-        config = coordinator.config  # You'll need to store config in coordinator
-        port = config[CONF_SERIAL_PORT]
-        baudrate = config[CONF_BAUDRATE]
-        hub_key = f"{port}_{baudrate}"
+    coordinator = hass.data[DOMAIN].pop(entry.entry_id)
 
-        remaining = [
-            e for e in hass.config_entries.async_entries(DOMAIN)
-            if e.entry_id != entry.entry_id  # Exclude current one
-            and e.data[CONF_SERIAL_PORT] == port
-            and e.data[CONF_BAUDRATE] == baudrate
-        ]
-        if not remaining:
-            hub = hass.data[DOMAIN]["hubs"].pop(hub_key, None)
-            if hub:
-                await hub.close()
+    # Clean up hub if no other entries use the same port + baudrate
+    config = coordinator.config
+    port = config[CONF_SERIAL_PORT]
+    baudrate = config[CONF_BAUDRATE]
+    hub_key = f"{port}_{baudrate}"
 
-    return unload_ok
+    # Check if any other active entries still use this hub
+    remaining = [
+        e
+        for e in hass.config_entries.async_entries(DOMAIN)
+        if e.entry_id != entry.entry_id
+        and e.data.get(CONF_SERIAL_PORT) == port
+        and e.data.get(CONF_BAUDRATE) == baudrate
+    ]
+
+    if not remaining:
+        hub = hass.data[DOMAIN]["hubs"].pop(hub_key, None)
+        if hub:
+            await hub.close()
+
+    return True
+
 
 class SDM630Hub:
     """Manages a single serial connection shared across meters."""
 
-    def __init__(self, hass, port: str, baudrate: int):
+    def __init__(self, hass: HomeAssistant, port: str, baudrate: int):
         self.hass = hass
         self.port = port
         self.baudrate = baudrate
@@ -104,5 +124,6 @@ class SDM630Hub:
         )
 
     async def close(self):
+        """Close the serial connection."""
         if self.client.connected:
             await self.client.close()
