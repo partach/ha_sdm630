@@ -24,7 +24,7 @@ class SDM630Coordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name="SDM630",
-            update_interval=timedelta(seconds=update_interval),
+            update_interval=timedelta(seconds=20),
         )
 
         self.port = port
