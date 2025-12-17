@@ -1,0 +1,11 @@
+{
+  "domain": "SDM630",
+  "name": "Eastron SDM630",
+  "version": "0.1.0",
+  "documentation": "https://github.com/partach/ha-sdm630",
+  "requirements": ["pymodbus>=3.7.4"],
+  "dependencies": [],
+  "codeowners": ["@partach"],
+  "config_flow": true,
+  "iot_class": "local_polling"
+}
