@@ -7,6 +7,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from pymodbus.client import AsyncModbusSerialClient
+from .options_flow import OptionsFlowHandler
 
 from .const import (
     DOMAIN,
