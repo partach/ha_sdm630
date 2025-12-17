@@ -19,7 +19,7 @@ REGISTER_SET_BASIC_PLUS = "basic_plus"
 REGISTER_SET_FULL = "full"
 
 # Define the three register sets
-_BASIC_REGISTERS: {
+_BASIC_REGISTERS = {
     # Essential sensors – fast polling
     "phase_1_l_n_volts": {"address": 0, "name": "Phase 1 L/N Volts", "unit": "V", "device_class": "voltage", "state_class": "measurement", "precision": 2},
     "phase_2_l_n_volts": {"address": 2, "name": "Phase 2 L/N Volts", "unit": "V", "device_class": "voltage", "state_class": "measurement", "precision": 2},
@@ -36,7 +36,7 @@ _BASIC_REGISTERS: {
     "export_energy": {"address": 74, "name": "Export Energy", "unit": "kWh", "device_class": "energy", "state_class": "total_increasing", "precision": 2},
     "total_kwh": {"address": 342, "name": "Total kWh", "unit": "kWh", "device_class": "energy", "state_class": "total", "precision": 2},
 }
-_BASIC_PLUS_REGISTERS : {
+_BASIC_PLUS_REGISTERS = {
     # Everything from basic + more useful ones
     **_BASIC_REGISTERS,
     "phase_1_volt_amps": {"address": 18, "name": "Phase 1 VA", "unit": "VA", "device_class": "apparent_power", "state_class": "measurement", "precision": 2},
@@ -51,7 +51,7 @@ _BASIC_PLUS_REGISTERS : {
     "line_3_to_line_1_volts": {"address": 204, "name": "Line 3 to Line 1 Volts", "unit": "V", "device_class": "voltage", "state_class": "measurement", "precision": 2},
     # Add more as you want
 }
-_FULL_REGISTERS: {
+_FULL_REGISTERS = {
     # All registers from your long list – you can copy them all here
     **_BASIC_PLUS_REGISTERS,
     # Paste all the remaining ones from your YAML (THD, demand, per-phase energy, etc.)
