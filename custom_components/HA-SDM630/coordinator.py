@@ -10,13 +10,11 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from pymodbus.client import AsyncModbusSerialClient
 from pymodbus.exceptions import ModbusException, ConnectionException
 
-from .const import VALIDATED_REGISTER_MAP as REGISTER_MAP
-
 _LOGGER = logging.getLogger(__name__)
 
 
 class HA_SDM630Coordinator(DataUpdateCoordinator):
-    def __init__(self, hass, client: AsyncModbusSerialClient, slave_id: int):
+    def __init__(self, hass, client: AsyncModbusSerialClient, slave_id: int, register_map: dict):
         super().__init__(
             hass,
             _LOGGER,
@@ -97,6 +95,7 @@ class HA_SDM630Coordinator(DataUpdateCoordinator):
                 registers = result.registers
 
                 for i, key in enumerate(keys):
+                    
                     reg_offset = i * 2
                     reg1 = registers[reg_offset]
                     reg2 = registers[reg_offset + 1]
@@ -109,7 +108,7 @@ class HA_SDM630Coordinator(DataUpdateCoordinator):
                     if value is None or (value != value):  # NaN check
                         value = None
                     else:
-                        precision = REGISTER_MAP[key].get("precision", 2)
+                        precision = self.register_map[key].get("precision", 2)
                         value = round(value, precision)
 
                     new_data[key] = value
