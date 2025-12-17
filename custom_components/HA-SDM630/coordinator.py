@@ -10,7 +10,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from pymodbus.client import AsyncModbusSerialClient
 from pymodbus.exceptions import ModbusException, ConnectionException
 
-from .const import REGISTER_MAP
+from .const import VALIDATED_REGISTER_MAP as REGISTER_MAP
 
 _LOGGER = logging.getLogger(__name__)
 
