@@ -25,7 +25,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-class SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class HA_SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for SDM630."""
 
     VERSION = 1
