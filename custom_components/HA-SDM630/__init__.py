@@ -23,37 +23,54 @@ PLATFORMS = [Platform.SENSOR]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up SDM630 from a config entry."""
     config = entry.data
 
-    # Create coordinator for polling
+    port = config[CONF_SERIAL_PORT]
+    baudrate = config[CONF_BAUDRATE]
+
+    # Get or create shared hub for this port
+    hubs = hass.data.setdefault(DOMAIN, {}).setdefault("hubs", {})
+    hub_key = f"{port}_{baudrate}"
+    if hub_key not in hubs:
+        hubs[hub_key] = SDM630Hub(hass, port, baudrate)
+
+    hub = hubs[hub_key]
+
     coordinator = SDM630Coordinator(
         hass,
-        config[CONF_SERIAL_PORT],
+        hub.client,  # ← Pass shared client
         config[CONF_SLAVE_ID],
-        config[CONF_BAUDRATE],
     )
 
-    # Test connection before proceeding
+    # Test connection
     if not await coordinator.async_test_connection():
         raise ConfigEntryNotReady("Could not connect to SDM630")
 
     await coordinator.async_config_entry_first_refresh()
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+    hass.data[DOMAIN][entry.entry_id] = coordinator
 
-    # Set up platforms (sensors)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         coordinator = hass.data[DOMAIN].pop(entry.entry_id)
-        await coordinator.client.close()  # ← Properly close serial connection
+
+        # Clean up hub if no more entries use this port
+        config = coordinator.config  # You'll need to store config in coordinator
+        port = config[CONF_SERIAL_PORT]
+        baudrate = config[CONF_BAUDRATE]
+        hub_key = f"{port}_{baudrate}"
+
+        remaining = [e for e in hass.config_entries.async_entries(DOMAIN) if e.data[CONF_SERIAL_PORT] == port and e.data[CONF_BAUDRATE] == baudrate]
+        if not remaining:
+            hub = hass.data[DOMAIN]["hubs"].pop(hub_key, None)
+            if hub:
+                await hub.close()
+
     return unload_ok
 
 class SDM630Hub:
