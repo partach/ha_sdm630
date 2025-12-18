@@ -206,10 +206,8 @@ class HA_SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await client.connect()
             if not client.connected:
                 raise ConnectionError("Failed to open serial port")
-
-            result = await client.read_input_registers(
-                address=0, count=2, slave=data[CONF_SLAVE_ID]
-            )
+            client.unit = data[CONF_SLAVE_ID]
+            result = await client.read_input_registers(address=0, count=2)
 
             if result.isError():
                 raise ModbusException(f"Modbus read error: {result}")
@@ -231,10 +229,8 @@ class HA_SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await client.connect()
             if not client.connected:
                 raise ConnectionError(f"Failed to connect to {data[CONF_HOST]}:{data[CONF_PORT]}")
-
-            result = await client.read_input_registers(
-                address=0, count=2, slave=data[CONF_SLAVE_ID]
-            )
+            client.unit = data[CONF_SLAVE_ID]
+            result = await client.read_input_registers(address=0, count=2)
 
             if result.isError():
                 raise ModbusException(f"Modbus read error: {result}")
