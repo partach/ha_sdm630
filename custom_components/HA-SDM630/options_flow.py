@@ -1,7 +1,6 @@
-from homeassistant.components import config_entries
+from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import selector
-from homeassistant.components import config_entries
 import voluptuous as vol
 from .const import CONF_REGISTER_SET, REGISTER_SET_BASIC, REGISTER_SET_BASIC_PLUS, REGISTER_SET_FULL, DEFAULT_REGISTER_SET
 
