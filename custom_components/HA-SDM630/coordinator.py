@@ -61,32 +61,6 @@ class HA_SDM630Coordinator(DataUpdateCoordinator):
             _LOGGER.debug("Failed to connect to SDM630: %s", err)
             return False
 
-    async def async_test_connection(self) -> bool:
-        """Test connection during setup using a temporary client."""
-        temp_client = AsyncModbusSerialClient(
-            port=self.client.port,
-            baudrate=self.client.comm_params.baudrate,
-            parity="N",
-            stopbits=1,
-            bytesize=8,
-            timeout=5,
-        )
-        try:
-            await temp_client.connect()
-            if not temp_client.connected:
-                return False
-
-            temp_client.unit = self.slave_id
-
-            result = await temp_client.read_input_registers(address=0, count=2)
-            return not result.isError()
-
-        except Exception as err:
-            _LOGGER.debug("SDM630 connection test failed: %s", err)
-            return False
-        finally:
-            await temp_client.close()
-
     async def _async_update_data(self) -> dict:
         """Fetch all data in batched async reads."""
         if not await self._async_connect():
