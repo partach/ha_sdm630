@@ -71,10 +71,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator.hub_key = hub_key
     entry.async_on_unload(entry.add_update_listener(update_listener))
 
-    # Test connection
-    if not await coordinator.async_test_connection():
-        raise ConfigEntryNotReady("Could not connect to SDM630")
-
     # First data refresh
     await coordinator.async_config_entry_first_refresh()
 
