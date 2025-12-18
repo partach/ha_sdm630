@@ -192,51 +192,69 @@ class HA_SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def _async_test_serial_connection(self, data: dict[str, Any]) -> None:
-        """Test serial connection to the SDM630 meter."""
-        client = AsyncModbusSerialClient(
-            port=data[CONF_SERIAL_PORT],
-            baudrate=data[CONF_BAUDRATE],
-            parity="N",
-            stopbits=1,
-            bytesize=8,
-            timeout=5,
-        )
+    async def _async_test_serial_connection(self, user_input):
+        client = None
         try:
-            await client.connect()
-            if not client.connected:
-                raise ConnectionError("Failed to open serial port")
+            client = AsyncModbusSerialClient(
+                port=user_input[CONF_PORT],
+                baudrate=user_input.get(CONF_BAUDRATE, 9600),
+                parity=user_input.get(CONF_PARITY, "N"),
+                stopbits=user_input.get(CONF_STOPBITS, 1),
+                bytesize=user_input.get(CONF_BYTESIZE, 8),
+                timeout=3,
+            )
+    
+            if not await client.connect():
+                raise CannotConnect("Failed to connect to serial port")
+    
+            # Optional: test read from a known register (e.g. unit ID or voltage)
             client.unit = data[CONF_SLAVE_ID]
-            result = await client.read_input_registers(address=0, count=2)
-
-            if result.isError():
-                raise ModbusException(f"Modbus read error: {result}")
-
-            if len(result.registers) != 2:
-                raise ValueError("Invalid response: expected 2 registers")
-
+            reader = await client.read_input_registers(0, 1)
+            if reader.isError():
+                raise CannotConnect("Modbus read failed")
+    
+            # Success!
+            return
+    
+        except Exception as err:
+            raise CannotConnect(str(err)) from err
+    
         finally:
-            await client.close()
+            if client is not None:
+                await client.close()
 
-    async def _async_test_tcp_connection(self, data: dict[str, Any]) -> None:
-        """Test TCP connection to the SDM630 meter."""
+async def _async_test_tcp_connection(self, data: dict[str, Any]) -> None:
+    """Test TCP connection to the SDM630 meter."""
+    client = None
+    try:
         client = AsyncModbusTcpClient(
             host=data[CONF_HOST],
             port=data[CONF_PORT],
             timeout=5,
         )
-        try:
-            await client.connect()
-            if not client.connected:
-                raise ConnectionError(f"Failed to connect to {data[CONF_HOST]}:{data[CONF_PORT]}")
-            client.unit = data[CONF_SLAVE_ID]
-            result = await client.read_input_registers(address=0, count=2)
 
-            if result.isError():
-                raise ModbusException(f"Modbus read error: {result}")
+        # Connect and verify
+        await client.connect()
+        if not client.connected:
+            raise ConnectionError(f"Failed to connect to {data[CONF_HOST]}:{data[CONF_PORT]}")
 
-            if len(result.registers) != 2:
-                raise ValueError("Invalid response: expected 2 registers")
+        # Set slave ID and test read
+        client.unit = data[CONF_SLAVE_ID]
+        result = await client.read_input_registers(address=0, count=2, unit=data[CONF_SLAVE_ID])
 
-        finally:
-            await client.close()
+        if result.isError():
+            raise ModbusException(f"Modbus read error: {result}")
+
+        if len(result.registers) != 2:
+            raise ValueError("Invalid response: expected 2 registers")
+
+        # Success! (no need to return anything)
+
+    finally:
+        # Safe close — only if client was created and has close method
+        if client is not None:
+            try:
+                await client.close()
+            except Exception as err:
+                # Log but don't fail the test if close fails
+                _LOGGER.debug("Error closing Modbus TCP client: %s", err)
