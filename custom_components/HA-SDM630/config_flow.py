@@ -211,24 +211,26 @@ class HA_SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 bytesize=data.get(CONF_BYTESIZE, DEFAULT_BYTESIZE),
                 timeout=5,
             )
-            if not await client.connect():
-                if not client.connected:
-                    raise ConnectionError("Failed to open serial port")
+            
+            await client.connect()
+            if not client.connected:
+                raise ConnectionError("Failed to open serial port")
     
-            reader = await client.read_input_registers(address=0, count=2, slave=data[CONF_SLAVE_ID])
-            if reader.isError():
-                raise ModbusException(f"Modbus read error: {reader}")
-            if len(reader.registers) != 2:
-                raise ValueError("Invalid response: expected 2 registers")    
-        except Exception as err:
-            _LOGGER.debug("Error closing Modbus Serial client: %s", err)
+            result = await client.read_input_registers(
+                address=0, count=2, slave=data[CONF_SLAVE_ID]
+            )
+            
+            if result.isError():
+                raise ModbusException(f"Modbus read error: {result}")
+                
+            if len(result.registers) != 2:
+                raise ValueError("Invalid response: expected 2 registers")
+    
         finally:
-            # Safe close — only if client was created and has close method
             if client is not None:
                 try:
                     await client.close()
                 except Exception as err:
-                    # Log but don't fail the test if close fails
                     _LOGGER.debug("Error closing Modbus Serial client: %s", err)
 
     async def _async_test_tcp_connection(self, data: dict[str, Any]) -> None:
@@ -241,12 +243,13 @@ class HA_SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 timeout=5,
             )
     
-            # Connect and verify
             await client.connect()
             if not client.connected:
                 raise ConnectionError(f"Failed to connect to {data[CONF_HOST]}:{data[CONF_PORT]}")
     
-            result = await client.read_input_registers(address=0, count=2, unit=data[CONF_SLAVE_ID])
+            result = await client.read_input_registers(
+                address=0, count=2, slave=data[CONF_SLAVE_ID]  # ← Use 'slave' not 'unit'
+            )
     
             if result.isError():
                 raise ModbusException(f"Modbus read error: {result}")
@@ -254,14 +257,9 @@ class HA_SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if len(result.registers) != 2:
                 raise ValueError("Invalid response: expected 2 registers")
     
-            # Success! (no need to return anything)
-        except Exception as err:
-            _LOGGER.debug("Error closing Modbus TCP client: %s", err)
         finally:
-            # Safe close — only if client was created and has close method
             if client is not None:
                 try:
                     await client.close()
                 except Exception as err:
-                    # Log but don't fail the test if close fails
                     _LOGGER.debug("Error closing Modbus TCP client: %s", err)
