@@ -220,10 +220,8 @@ class HA_SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 raise ModbusException(f"Modbus read error: {reader}")
             if len(result.registers) != 2:
                 raise ValueError("Invalid response: expected 2 registers")    
-    
         except Exception as err:
-           raise ConnectionError((str(err)) from err
-    
+            _LOGGER.debug("Error closing Modbus Serial client: %s", err)
         finally:
             # Safe close — only if client was created and has close method
             if client is not None:
@@ -231,7 +229,7 @@ class HA_SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     await client.close()
                 except Exception as err:
                     # Log but don't fail the test if close fails
-                    _LOGGER.debug("Error closing Modbus Serial client: %s", err
+                    _LOGGER.debug("Error closing Modbus Serial client: %s", err)
 
     async def _async_test_tcp_connection(self, data: dict[str, Any]) -> None:
         """Test TCP connection to the SDM630 meter."""
@@ -257,7 +255,8 @@ class HA_SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 raise ValueError("Invalid response: expected 2 registers")
     
             # Success! (no need to return anything)
-    
+        except Exception as err:
+            _LOGGER.debug("Error closing Modbus TCP client: %s", err)
         finally:
             # Safe close — only if client was created and has close method
             if client is not None:
