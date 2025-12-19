@@ -162,8 +162,7 @@ class SDM630SerialHub:
                     await self.client.close()
                 except Exception as err:
                     _LOGGER.exception("Unexpected error closing SDM630 connection for serial: %s", err)
-    else:
-        _LOGGER.debug("SDM630 hub client was None – nothing to close")
+
 
 class SDM630TcpHub:
     """Manages a single TCP connection shared across meters."""
