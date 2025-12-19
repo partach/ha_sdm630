@@ -217,7 +217,7 @@ class HA_SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 raise ConnectionError("Failed to open serial port")
     
             result = await client.read_input_registers(
-                address=0, count=2, slave=data[CONF_SLAVE_ID]
+                address=0, count=2, device_id=user_input[CONF_SLAVE_ID]
             )
             
             if result.isError():
@@ -248,7 +248,7 @@ class HA_SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 raise ConnectionError(f"Failed to connect to {data[CONF_HOST]}:{data[CONF_PORT]}")
     
             result = await client.read_input_registers(
-                address=0, count=2, slave=data[CONF_SLAVE_ID]  # ← Use 'slave' not 'unit'
+                address=0, count=2, device_id=user_input[CONF_SLAVE_ID]  # ← Use 'device_id' not 'slave'
             )
     
             if result.isError():
