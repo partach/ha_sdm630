@@ -27,7 +27,10 @@ from .const import (
     CONNECTION_TYPE_SERIAL,
     CONNECTION_TYPE_TCP,
     DEFAULT_BAUDRATE,
+    DEFAULT_BYTESIZE,
+    DEFAULT_PARITY,
     DEFAULT_SLAVE_ID,
+    DEFAULT_STOPBITS,
     DEFAULT_TCP_PORT,
     DOMAIN,
 )
@@ -107,10 +110,18 @@ class HA_SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_SLAVE_ID, default=DEFAULT_SLAVE_ID): vol.All(
                     vol.Coerce(int), vol.Range(min=1, max=247)
                 ),
-                vol.Required(CONF_BAUDRATE, default=DEFAULT_BAUDRATE): vol.In([2400, 4800, 9600, 19200, 38400]),
-                vol.Required(CONF_PARITY, default="N"): vol.In(["N", "E", "O"]),
-                vol.Required(CONF_STOPBITS, default=1): vol.In([1, 2]),
-                vol.Required(CONF_BYTESIZE, default=8): vol.In([7, 8]),
+                vol.Required(CONF_BAUDRATE, default=DEFAULT_BAUDRATE): vol.In(
+                    [2400, 4800, 9600, 19200, 38400]
+                ),
+                vol.Required(CONF_PARITY, default=DEFAULT_PARITY): vol.In(
+                    ["N", "E", "O"]
+                ),
+                vol.Required(CONF_STOPBITS, default=DEFAULT_STOPBITS): vol.In(
+                    [1, 2]
+                ),
+                vol.Required(CONF_BYTESIZE, default=DEFAULT_BYTESIZE): vol.In(
+                    [7, 8]
+                ),
             }
         )
 
@@ -188,18 +199,18 @@ class HA_SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(step_id="tcp", data_schema=data_schema, errors=errors)
 
-    async def _async_test_serial_connection(self, user_input):
+    async def _async_test_serial_connection(self, data: dict[str, Any]) -> None:
+        """Test serial connection to the SDM630 meter."""
         client = None
         try:
             client = AsyncModbusSerialClient(
-                port=user_input[CONF_SERIAL_PORT],
-                baudrate=user_input.get(CONF_BAUDRATE, 9600),
-                parity=user_input.get(CONF_PARITY, "N"),
-                stopbits=user_input.get(CONF_STOPBITS, 1),
-                bytesize=user_input.get(CONF_BYTESIZE, 8),
-                timeout=3,
+                port=data[CONF_SERIAL_PORT],
+                baudrate=data[CONF_BAUDRATE],
+                parity=data.get(CONF_PARITY, DEFAULT_PARITY),
+                stopbits=data.get(CONF_STOPBITS, DEFAULT_STOPBITS),
+                bytesize=data.get(CONF_BYTESIZE, DEFAULT_BYTESIZE),
+                timeout=5,
             )
-    
             if not await client.connect():
                 if not client.connected:
                     raise ConnectionError("Failed to open serial port")
@@ -209,15 +220,18 @@ class HA_SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 raise ModbusException(f"Modbus read error: {reader}")
             if len(result.registers) != 2:
                 raise ValueError("Invalid response: expected 2 registers")    
-            # Success!
-            return
     
         except Exception as err:
            raise ConnectionError((str(err)) from err
     
         finally:
+            # Safe close — only if client was created and has close method
             if client is not None:
-                await client.close()
+                try:
+                    await client.close()
+                except Exception as err:
+                    # Log but don't fail the test if close fails
+                    _LOGGER.debug("Error closing Modbus Serial client: %s", err
 
     async def _async_test_tcp_connection(self, data: dict[str, Any]) -> None:
         """Test TCP connection to the SDM630 meter."""
