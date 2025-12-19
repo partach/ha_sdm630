@@ -34,8 +34,8 @@ SDM630 home assistant integration for easy setup and use of the device (via Modb
 Options:
 1. Install via HACS (is coming in the near future)
 2. Install manually:
-   * The integration: In UI go to `HACS`--> `custom repositories` --> `Repo`: partach/HA-SDM630, `Type`: Integration
-   * After HA reboot (Needed for new integrations): choose 'add integration' (in devices and services) and choose `HA-SDM630` in the list.
+   * The integration: In UI go to `HACS`--> `custom repositories` --> `Repo`: partach/ha_sdm630, `Type`: Integration
+   * After HA reboot (Needed for new integrations): choose 'add integration' (in devices and services) and choose `HA-SMD630` in the list.
      
 Let the install config of the integration guide you as it asks you for the needed data.
 
