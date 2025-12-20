@@ -104,7 +104,7 @@ _FULL_REGISTERS = {
     "phase_3_current_thd": {"address": 244, "name": "Phase 3 Current THD", "unit": "%", "state_class": "measurement", "precision": 2},
     "average_line_to_neutral_volts_thd": {"address": 248, "name": "Average Line to Neutral Volts THD", "unit": "%", "state_class": "measurement", "precision": 2},
     "average_line_current_thd": {"address": 250, "name": "Average Line Current THD", "unit": "%", "state_class": "measurement", "precision": 2},
-    "total_system_power_factor_5": {"address": 254, "name": "Total System Power Factor (5)", "unit": "deg", "state_class": "measurement", "precision": 2},
+    "total_system_power_factor_s": {"address": 254, "name": "Total System Power Factor Signed", "unit": None, "state_class": "measurement", "precision": 2},
     "phase_1_current_demand": {"address": 258, "name": "Phase 1 Current Demand", "unit": "A", "device_class": "current", "state_class": "measurement", "precision": 2},
     "phase_2_current_demand": {"address": 260, "name": "Phase 2 Current Demand", "unit": "A", "device_class": "current", "state_class": "measurement", "precision": 2},
     "phase_3_current_demand": {"address": 262, "name": "Phase 3 Current Demand", "unit": "A", "device_class": "current", "state_class": "measurement", "precision": 2},
