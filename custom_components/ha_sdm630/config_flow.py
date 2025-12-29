@@ -234,7 +234,7 @@ class HA_SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         finally:
             if client is not None:
                 try:
-                    await client.close()
+                    client.close()
                 except Exception as err:
                     _LOGGER.debug("Error closing Modbus Serial client: %s", err)
 
@@ -265,7 +265,7 @@ class HA_SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         finally:
             if client is not None:
                 try:
-                    await client.close()
+                    client.close()
                 except Exception as err:
                     _LOGGER.debug("Error closing Modbus TCP client: %s", err)
                     
