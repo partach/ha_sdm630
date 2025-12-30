@@ -18,6 +18,7 @@ CONF_BAUDRATE = "baudrate"
 CONF_PARITY = "parity"
 CONF_STOPBITS = "stopbits"
 CONF_BYTESIZE = "bytesize"
+CONF_UPDATE_INTERVAL = "update_interval"
 
 # TCP settings
 CONF_HOST = "host"
