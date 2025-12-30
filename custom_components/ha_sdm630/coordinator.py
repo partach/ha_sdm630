@@ -23,6 +23,7 @@ class HA_SDM630Coordinator(DataUpdateCoordinator):
         self.slave_id = slave_id
         self.register_map = register_map
         self._address_groups = self._group_addresses(register_map)  # Use passed map
+        self.update_interval = update_interval
 
     def _group_addresses(self, reg_map: dict) -> Dict[int, list]:
         """Group consecutive register addresses to minimize requests."""
