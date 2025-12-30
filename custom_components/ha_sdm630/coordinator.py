@@ -12,7 +12,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class HA_SDM630Coordinator(DataUpdateCoordinator):
-    def __init__(self, hass, client, slave_id: int, register_map: dict, update_interval: timedelta):
+    def __init__(self, hass, client, slave_id: int, register_map: dict, update_interval: timedelta = timedelta(seconds=10)):
         super().__init__(
             hass,
             _LOGGER,
