@@ -12,18 +12,18 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class HA_SDM630Coordinator(DataUpdateCoordinator):
-    def __init__(self, hass, client, slave_id: int, register_map: dict):
+    def __init__(self, hass, client, slave_id: int, register_map: dict, update_interval: timedelta):
         super().__init__(
             hass,
             _LOGGER,
             name="SDM630",
-            timedelta(seconds=update_interval_seconds),
+            update_interval=update_interval,
         )
         self.client = client  # ← Shared client
         self.slave_id = slave_id
         self.register_map = register_map
         self._address_groups = self._group_addresses(register_map)  # Use passed map
-        self.update_interval = update_interval_seconds
+        self.update_interval = update_interval
 
     def _group_addresses(self, reg_map: dict) -> Dict[int, list]:
         """Group consecutive register addresses to minimize requests."""
