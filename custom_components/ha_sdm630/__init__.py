@@ -66,13 +66,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hubs[hub_key] = SDM630TcpHub(hass, host, port)
 
     hub = hubs[hub_key]
-
+    update_interval = config_entry.options.get(CONF_UPDATE_INTERVAL, timedelta(seconds=10))
     # Create coordinator with shared client and selected registers
     coordinator = HA_SDM630Coordinator(
         hass,
         hub.client,
         config[CONF_SLAVE_ID],
-        selected_registers
+        selected_registers,
+        update_interval
     )
     # Store config and hub_key for unload cleanup
     coordinator.config = config
