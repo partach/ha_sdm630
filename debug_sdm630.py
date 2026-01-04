@@ -1,0 +1,152 @@
+import asyncio
+import logging
+import struct
+import argparse
+from pymodbus.client import AsyncModbusTcpClient
+from pymodbus.exceptions import ModbusException
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+# Suppress noisy pymodbus logs
+# logging.getLogger("pymodbus").setLevel(logging.ERROR)
+_LOGGER = logging.getLogger("sdm630_debug")
+
+# --- REGISTER DEFINITIONS ---
+REGISTER_MAP = {
+    "phase_1_l_n_volts": {"address": 0, "name": "Phase 1 L/N Volts", "unit": "V"},
+    "phase_2_l_n_volts": {"address": 2, "name": "Phase 2 L/N Volts", "unit": "V"},
+    "phase_3_l_n_volts": {"address": 4, "name": "Phase 3 L/N Volts", "unit": "V"},
+    "phase_1_current": {"address": 6, "name": "Phase 1 Current", "unit": "A"},
+    "phase_2_current": {"address": 8, "name": "Phase 2 Current", "unit": "A"},
+    "phase_3_current": {"address": 10, "name": "Phase 3 Current", "unit": "A"},
+    "phase_1_power": {"address": 12, "name": "Phase 1 Power", "unit": "W"},
+    "phase_2_power": {"address": 14, "name": "Phase 2 Power", "unit": "W"},
+    "phase_3_power": {"address": 16, "name": "Phase 3 Power", "unit": "W"},
+    "total_system_power": {"address": 52, "name": "Total Power", "unit": "W"},
+    "frequency": {"address": 70, "name": "Frequency", "unit": "Hz"},
+    "import_energy": {"address": 72, "name": "Import Energy", "unit": "kWh"},
+    "export_energy": {"address": 74, "name": "Export Energy", "unit": "kWh"},
+    "total_kwh": {"address": 342, "name": "Total kWh", "unit": "kWh"},
+}
+
+def group_addresses(reg_map, max_registers=4):
+    """
+    Group consecutive register addresses.
+    Limits group size to max_registers to avoid gateway bugs with large packets.
+    """
+    addresses = sorted([(info["address"], key) for key, info in reg_map.items()])
+    groups = {}
+    current_start = None
+    current_keys = []
+
+    for addr, key in addresses:
+        if current_start is None:
+            current_start = addr
+            current_keys = [key]
+        else:
+            # Check for continuity AND max size
+            # current size in registers = len(current_keys) * 2
+            current_size = len(current_keys) * 2
+            
+            if (addr == current_start + current_size) and (current_size + 2 <= max_registers):
+                current_keys.append(key)
+            else:
+                groups[current_start] = current_keys
+                current_start = addr
+                current_keys = [key]
+
+    if current_start is not None:
+        groups[current_start] = current_keys
+    
+    return groups
+
+async def read_sdm630(host, port, slave_id):
+    """Connect and read data."""
+    
+    # LIMIT MAX REGISTERS to 4 (2 floats) per request
+    # This prevents the gateway from sending malformed large packets.
+    address_groups = group_addresses(REGISTER_MAP, max_registers=4)
+    print(f"Starting read cycle for Slave ID {slave_id} on {host}:{port}...")
+
+    # Reuse connection but close on error
+    client = AsyncModbusTcpClient(host=host, port=port, timeout=5)
+    connected = False
+
+    try:
+        await client.connect()
+        connected = client.connected
+    except Exception as e:
+        _LOGGER.error(f"Initial connection failed: {e}")
+        return
+
+    for start_addr, keys in address_groups.items():
+        if not connected:
+            try:
+                await client.connect()
+                connected = client.connected
+            except:
+                pass
+        
+        if not connected:
+            _LOGGER.error(f"Skipping {keys} - not connected")
+            continue
+
+        count = len(keys) * 2
+        
+        try:
+            result = await client.read_input_registers(
+                address=start_addr,
+                count=count,
+                device_id=slave_id
+            )
+
+            if result.isError():
+                _LOGGER.error(f"Error reading address {start_addr}: {result}")
+                # Force reconnect on logical error too
+                client.close()
+                connected = False
+                await asyncio.sleep(0.5)
+                continue
+
+            registers = result.registers
+            
+            for i, key in enumerate(keys):
+                reg_offset = i * 2
+                if reg_offset + 1 >= len(registers):
+                    break
+                    
+                reg1 = registers[reg_offset]
+                reg2 = registers[reg_offset + 1]
+
+                raw = struct.pack(">HH", reg1, reg2)
+                value = struct.unpack(">f", raw)[0]
+
+                if value != value: # NaN check
+                    value = None
+                else:
+                    value = round(value, 2)
+                
+                unit = REGISTER_MAP[key].get('unit', '')
+                print(f"{key:<25}: {value} {unit}")
+
+        except (ModbusException, Exception) as e:
+            _LOGGER.error(f"Error reading group {start_addr}: {e}")
+            client.close()
+            connected = False
+            await asyncio.sleep(0.5)
+        
+        # Small pause between requests
+        await asyncio.sleep(0.1)
+
+    client.close()
+    print("Cycle completed.")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="SDM630 TCP Debug Tool")
+    parser.add_argument("--host", default="192.168.1.10", help="Target IP address")
+    parser.add_argument("--port", type=int, default=502, help="Target port")
+    parser.add_argument("--slave", type=int, default=1, help="Modbus Slave ID")
+
+    args = parser.parse_args()
+    
+    asyncio.run(read_sdm630(args.host, args.port, args.slave))
