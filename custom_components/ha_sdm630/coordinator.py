@@ -4,7 +4,7 @@ import logging
 import struct
 from datetime import timedelta
 from typing import Dict
-
+import asyncio
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from pymodbus.exceptions import ModbusException, ConnectionException
 
