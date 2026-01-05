@@ -10,6 +10,10 @@ from pymodbus.exceptions import ModbusException, ConnectionException
 
 _LOGGER = logging.getLogger(__name__)
 
+# Reduce noise from pymodbus
+# Setting parent logger to CRITICAL to catch all sub-loggers
+logging.getLogger("pymodbus").setLevel(logging.CRITICAL)
+logging.getLogger("pymodbus.logging").setLevel(logging.CRITICAL)
 
 class HA_SDM630Coordinator(DataUpdateCoordinator):
     def __init__(self, hass, client, slave_id: int, register_map: dict, update_interval: timedelta = timedelta(seconds=10)):
@@ -22,10 +26,10 @@ class HA_SDM630Coordinator(DataUpdateCoordinator):
         self.client = client  # ← Shared client
         self.slave_id = slave_id
         self.register_map = register_map
-        self._address_groups = self._group_addresses(register_map)  # Use passed map
+        self._address_groups = self._group_addresses(register_map, max_registers=4)  # Use passed map
         self.update_interval = update_interval
 
-    def _group_addresses(self, reg_map: dict) -> Dict[int, list]:
+    def _group_addresses(self, reg_map: dict, max_registers=4) -> Dict[int, list]:
         """Group consecutive register addresses to minimize requests."""
         addresses = sorted([(info["address"], key) for key, info in reg_map.items()])
         groups = {}
@@ -36,14 +40,21 @@ class HA_SDM630Coordinator(DataUpdateCoordinator):
             if current_start is None:
                 current_start = addr
                 current_keys = [key]
-            elif addr == current_start + len(current_keys) * 2:  # Consecutive (2 regs per float)
-                current_keys.append(key)
+#            elif addr == current_start + len(current_keys) * 2:  # Consecutive (2 regs per float)
+#                current_keys.append(key)
             else:
                 # Save previous group
-                groups[current_start] = current_keys
-                current_start = addr
-                current_keys = [key]
-
+ #               groups[current_start] = current_keys
+ #               current_start = addr
+ #               current_keys = [key]
+                current_size = len(current_keys) * 2
+                # Check for continuity AND max size
+                if (addr == current_start + current_size) and (current_size + 2 <= max_registers):
+                    current_keys.append(key)
+                else:
+                    groups[current_start] = current_keys
+                    current_start = addr
+                    current_keys = [key]
         # Save last group
         if current_start is not None:
             groups[current_start] = current_keys
@@ -70,19 +81,33 @@ class HA_SDM630Coordinator(DataUpdateCoordinator):
         try:
             for start_addr, keys in self._address_groups.items():
                 count = len(keys) * 2  # 2 registers per float
-                result = await self.client.read_input_registers(
-                    address=start_addr,
-                    count=count,
-                    device_id=self.slave_id,
-                )
-        
+                try:
+                    result = await self.client.read_input_registers(
+                        address=start_addr,
+                        count=count,
+                        device_id=self.slave_id,
+                    )
+                except ModbusException as e:
+                    # Log as debug to reduce noise for expected transient errors
+                    _LOGGER.debug(f"Modbus error reading address {start_addr}: {e}")
+                    # Force reconnect on error to clear transaction ID mismatches
+                    self.client.close()
+                    await asyncio.sleep(0.5)
+                    await self._async_connect()
+                    continue        
                 if result.isError():
-                    raise ModbusException(f"Read error at {start_addr}: {result}")
+                    _LOGGER.debug(f"Read error at {start_addr}: {result}")
+                    self.client.close()
+                    await asyncio.sleep(0.5)
+                    await self._async_connect()
+                    continue
         
                 registers = result.registers
         
                 for i, key in enumerate(keys):
                     reg_offset = i * 2
+                    if reg_offset + 1 >= len(registers): # new
+                        break    
                     reg1 = registers[reg_offset]
                     reg2 = registers[reg_offset + 1]
         
@@ -107,6 +132,8 @@ class HA_SDM630Coordinator(DataUpdateCoordinator):
                         value = round(value, precision)
         
                     new_data[key] = value
+                # Small delay between requests to allow gateway buffer to clear
+                await asyncio.sleep(0.1)                
         
             return new_data
 
