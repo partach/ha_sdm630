@@ -6,6 +6,7 @@
 [![License](https://img.shields.io/github/license/partach/ha_sdm630?color=ffca28&style=flat-square)](https://github.com/partach/ha_sdm630/blob/main/LICENSE)
 [![HACS validated](https://img.shields.io/badge/HACS-validated-41BDF5?style=flat-square)](https://github.com/hacs/integration)
 
+**UPDATE: I created the [protocol wizard](https://github.com/partach/protocol_wizard). It supports any Modbus device, also the SDM630**
 SDM630 home assistant integration for easy setup and use of the device (via Modbus)
 
 
