@@ -1,13 +1,21 @@
 {
   "domain": "ha_sdm630",
   "name": "HA-SDM630",
-  "codeowners": ["@partach"],
+  "codeowners": [
+    "@partach"
+  ],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/partach/ha_sdm630",
   "integration_type": "hub",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/partach/ha_sdm630/issues",
-  "requirements": ["pymodbus>=3.10.0"],
+  "loggers": [
+    "pymodbus"
+  ],
+  "requirements": [
+    "pymodbus>=3.10.0,<4",
+    "pyserial>=3.5"
+  ],
   "version": "0.3.5"
 }

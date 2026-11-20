@@ -55,8 +55,7 @@ class HA_SDM630Coordinator(DataUpdateCoordinator):
         self.client = client  # ← Shared client
         self.slave_id = slave_id
         self.register_map = register_map
-        self._address_groups = self._group_addresses(register_map, max_registers=4)  # Use passed map
-        self.update_interval = update_interval
+        self._address_groups = self._group_addresses(register_map, max_registers=4)
         self.invert_power = invert_power
         self.swap_import_export = swap_import_export
         # Serialises whole poll cycles of all meters that share one bus/connection,

@@ -52,6 +52,7 @@ DEFAULT_REGISTER_SET = "basic"
 DEFAULT_STOPBITS = 1
 DEFAULT_BYTESIZE = 8
 DEFAULT_PARITY = "N"
+DEFAULT_UPDATE_INTERVAL = 10  # seconds
 
 # Register set options
 REGISTER_SET_BASIC = "basic"
@@ -95,9 +96,9 @@ _BASIC_PLUS_REGISTERS = {
 
 _FULL_REGISTERS = {
     **_BASIC_PLUS_REGISTERS,
-    "phase_1_volt_amps_reactive": {"address": 24, "name": "Phase 1 Volt Amps Reactive", "unit": "VAr", "device_class": "reactive_power", "state_class": "measurement", "precision": 2},
-    "phase_2_volt_amps_reactive": {"address": 26, "name": "Phase 2 Volt Amps Reactive", "unit": "VAr", "device_class": "reactive_power", "state_class": "measurement", "precision": 2},
-    "phase_3_volt_amps_reactive": {"address": 28, "name": "Phase 3 Volt Amps Reactive", "unit": "VAr", "device_class": "reactive_power", "state_class": "measurement", "precision": 2},
+    "phase_1_volt_amps_reactive": {"address": 24, "name": "Phase 1 Volt Amps Reactive", "unit": "var", "device_class": "reactive_power", "state_class": "measurement", "precision": 2},
+    "phase_2_volt_amps_reactive": {"address": 26, "name": "Phase 2 Volt Amps Reactive", "unit": "var", "device_class": "reactive_power", "state_class": "measurement", "precision": 2},
+    "phase_3_volt_amps_reactive": {"address": 28, "name": "Phase 3 Volt Amps Reactive", "unit": "var", "device_class": "reactive_power", "state_class": "measurement", "precision": 2},
     "phase_1_phase_angle": {"address": 36, "name": "Phase 1 Phase Angle", "unit": "deg", "state_class": "measurement", "precision": 2},
     "phase_2_phase_angle": {"address": 38, "name": "Phase 2 Phase Angle", "unit": "deg", "state_class": "measurement", "precision": 2},
     "phase_3_phase_angle": {"address": 40, "name": "Phase 3 Phase Angle", "unit": "deg", "state_class": "measurement", "precision": 2},
@@ -105,10 +106,10 @@ _FULL_REGISTERS = {
     "average_line_current": {"address": 46, "name": "Average Line Current", "unit": "A", "device_class": "current", "state_class": "measurement", "precision": 2},
     "sum_of_line_currents": {"address": 48, "name": "Sum of Line Currents", "unit": "A", "device_class": "current", "state_class": "measurement", "precision": 2},
     "total_system_volt_amps": {"address": 56, "name": "Total System Volt Amps", "unit": "VA", "device_class": "apparent_power", "state_class": "measurement", "precision": 2},
-    "total_system_var": {"address": 60, "name": "Total System VAr", "unit": "VAr", "device_class": "reactive_power", "state_class": "measurement", "precision": 2,"word_order": "BA"},
+    "total_system_var": {"address": 60, "name": "Total System VAr", "unit": "var", "device_class": "reactive_power", "state_class": "measurement", "precision": 2, "word_order": "BA"},
     "total_system_power_factor": {"address": 62, "name": "Total System Power Factor", "unit": None, "device_class": "power_factor", "state_class": "measurement", "precision": 3},
     "total_system_phase_angle": {"address": 66, "name": "Total System Phase Angle", "unit": "deg", "state_class": "measurement", "precision": 2},
-    "vah_since_last_reset": {"address": 80, "name": "VAh Since Last Reset", "unit": "kVAh", "device_class": "energy", "state_class": "total_increasing", "precision": 2},
+    "vah_since_last_reset": {"address": 80, "name": "VAh Since Last Reset", "unit": "kVAh", "device_class": None, "state_class": "total_increasing", "precision": 2},
     "ah_since_last_reset": {"address": 82, "name": "Ah Since Last Reset", "unit": "Ah", "state_class": "total_increasing", "precision": 2},
     "total_system_power_demand": {"address": 84, "name": "Total System Power Demand", "unit": "W", "device_class": "power", "state_class": "measurement", "precision": 2},
     "maximum_total_system_power_demand": {"address": 86, "name": "Maximum Total System Power Demand", "unit": "W", "device_class": "power", "state_class": "measurement", "precision": 2},

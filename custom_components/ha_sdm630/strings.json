@@ -1,4 +1,52 @@
 {
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect an SDM630",
+        "description": "How is the meter connected to Home Assistant?",
+        "data": {
+          "connection_type": "Connection type"
+        }
+      },
+      "serial": {
+        "title": "Serial (RS485) connection",
+        "data": {
+          "name": "Name",
+          "serial_port": "Serial port",
+          "slave_id": "Modbus address (slave ID)",
+          "baudrate": "Baud rate",
+          "parity": "Parity",
+          "stopbits": "Stop bits",
+          "bytesize": "Data bits"
+        },
+        "data_description": {
+          "serial_port": "Pick the USB/RS485 adapter or type a path. /dev/serial/by-id/... paths keep working when adapters are re-plugged.",
+          "slave_id": "Set on the meter (default 1). Every meter on one bus needs its own address."
+        }
+      },
+      "tcp": {
+        "title": "Modbus TCP connection",
+        "data": {
+          "name": "Name",
+          "host": "Host",
+          "port": "Port",
+          "slave_id": "Modbus address (slave ID)"
+        },
+        "data_description": {
+          "host": "IP address or hostname of the Modbus TCP gateway.",
+          "slave_id": "Address of the meter behind the gateway (default 1)."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not open the connection. Check the port or host and that nothing else is using it.",
+      "read_error": "Connected, but the meter did not answer correctly. Check the Modbus address and the serial settings (baud rate, parity).",
+      "unknown": "Unexpected error, see the Home Assistant log."
+    },
+    "abort": {
+      "already_configured": "This meter (same connection and Modbus address) is already set up."
+    }
+  },
   "options": {
     "step": {
       "init": {

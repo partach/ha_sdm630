@@ -1,73 +1,103 @@
 """Config flow for SDM630 integration."""
 
+from __future__ import annotations
+
 import logging
+import os
+from collections.abc import Mapping
 from typing import Any
 
 import serial.tools.list_ports
 import voluptuous as vol
-from pymodbus.client import AsyncModbusSerialClient, AsyncModbusTcpClient
-from pymodbus.exceptions import ModbusException
-from homeassistant import config_entries
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_NAME
-from homeassistant.data_entry_flow import FlowResult
-from homeassistant.helpers import selector
 from homeassistant.core import callback
+from homeassistant.helpers import selector
+from pymodbus.exceptions import ModbusException
 
 from .const import (
     CONF_BAUDRATE,
     CONF_BYTESIZE,
     CONF_CONNECTION_TYPE,
     CONF_HOST,
+    CONF_INVERT_POWER,
     CONF_PARITY,
     CONF_PORT,
+    CONF_REGISTER_SET,
     CONF_SERIAL_PORT,
     CONF_SLAVE_ID,
     CONF_STOPBITS,
+    CONF_SWAP_IMPORT_EXPORT,
+    CONF_UPDATE_INTERVAL,
     CONNECTION_TYPE_SERIAL,
     CONNECTION_TYPE_TCP,
     DEFAULT_BAUDRATE,
     DEFAULT_BYTESIZE,
     DEFAULT_PARITY,
+    DEFAULT_REGISTER_SET,
     DEFAULT_SLAVE_ID,
     DEFAULT_STOPBITS,
     DEFAULT_TCP_PORT,
-    CONF_REGISTER_SET,
-    CONF_INVERT_POWER,
-    CONF_SWAP_IMPORT_EXPORT,
-    DEFAULT_REGISTER_SET,
+    DEFAULT_UPDATE_INTERVAL,
+    DOMAIN,
     REGISTER_SET_BASIC,
     REGISTER_SET_BASIC_PLUS,
     REGISTER_SET_FULL,
-    DOMAIN,
 )
+from .hub import create_client, get_hubs, hub_key
 
 _LOGGER = logging.getLogger(__name__)
 
+_SERIAL_BY_ID = "/dev/serial/by-id"
 
-class HA_SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+_SLAVE_ID_SCHEMA = vol.All(vol.Coerce(int), vol.Range(min=1, max=247))
+
+
+def _list_serial_ports() -> list[selector.SelectOptionDict]:
+    """List serial ports, preferring stable /dev/serial/by-id paths (blocking I/O)."""
+    by_id: dict[str, str] = {}
+    if os.path.isdir(_SERIAL_BY_ID):
+        for name in os.listdir(_SERIAL_BY_ID):
+            link = os.path.join(_SERIAL_BY_ID, name)
+            by_id[os.path.realpath(link)] = link
+
+    options = []
+    for port in serial.tools.list_ports.comports():
+        if not port.device:
+            continue
+        # ttyUSB0/ttyUSB1 can swap after a reboot; the by-id path stays the same
+        path = by_id.get(os.path.realpath(port.device), port.device)
+        label = f"{path} - {port.description or 'Unknown device'}"
+        if port.manufacturer:
+            label += f" ({port.manufacturer})"
+        options.append(selector.SelectOptionDict(value=path, label=label))
+    return sorted(options, key=lambda option: option["value"])
+
+
+def _meter_unique_id(data: Mapping[str, Any]) -> str:
+    """One config entry per meter: same port/host and same Modbus address."""
+    if data[CONF_CONNECTION_TYPE] == CONNECTION_TYPE_SERIAL:
+        return f"serial_{data[CONF_SERIAL_PORT]}_{data[CONF_SLAVE_ID]}"
+    return f"tcp_{data[CONF_HOST]}:{data[CONF_PORT]}_{data[CONF_SLAVE_ID]}"
+
+
+class HA_SDM630ConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for SDM630."""
 
     VERSION = 1
 
-    def __init__(self):
-        """Initialize the config flow."""
-        self._connection_type = None
-
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry: ConfigEntry):
+    def async_get_options_flow(config_entry) -> SDM630OptionsFlowHandler:
         """Get the options flow for this handler."""
-        return SDM630OptionsFlowHandler(config_entry)
-        
-    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        return SDM630OptionsFlowHandler()
+
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle connection type selection."""
         if user_input is not None:
-            self._connection_type = user_input[CONF_CONNECTION_TYPE]
-            if self._connection_type == CONNECTION_TYPE_SERIAL:
+            if user_input[CONF_CONNECTION_TYPE] == CONNECTION_TYPE_SERIAL:
                 return await self.async_step_serial()
-            else:
-                return await self.async_step_tcp()
+            return await self.async_step_tcp()
 
         data_schema = vol.Schema(
             {
@@ -82,29 +112,20 @@ class HA_SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ),
             }
         )
+        return self.async_show_form(step_id="user", data_schema=data_schema)
 
-        return self.async_show_form(step_id="user",data_schema=data_schema)
-
-    async def async_step_serial(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    async def async_step_serial(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle serial connection configuration."""
-        errors = {}
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            data = {CONF_CONNECTION_TYPE: CONNECTION_TYPE_SERIAL, **user_input}
+            result = await self._async_validate_and_create(data, errors)
+            if result is not None:
+                return result
 
         # Discover serial ports every time (in case plugged/unplugged)
-        ports = await self.hass.async_add_executor_job(serial.tools.list_ports.comports)
-
-        port_options = [
-            selector.SelectOptionDict(
-                value=port.device,
-                label=(
-                    f"{port.device} - {port.description or 'Unknown device'}"
-                    + (f" ({port.manufacturer})" if port.manufacturer else "")
-                ),
-            )
-            for port in ports
-            if port.device
-        ]
-        port_options.sort(key=lambda x: x["value"])
-
+        port_options = await self.hass.async_add_executor_job(_list_serial_ports)
         data_schema = vol.Schema(
             {
                 vol.Required(CONF_NAME, default="SDM630"): str,
@@ -112,59 +133,34 @@ class HA_SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     selector.SelectSelectorConfig(
                         options=port_options,
                         mode=selector.SelectSelectorMode.DROPDOWN,
+                        # Allow typing a path that isn't listed
+                        custom_value=True,
                     )
                 ),
-                vol.Required(CONF_SLAVE_ID, default=DEFAULT_SLAVE_ID): vol.All(
-                    vol.Coerce(int), vol.Range(min=1, max=247)
-                ),
+                vol.Required(CONF_SLAVE_ID, default=DEFAULT_SLAVE_ID): _SLAVE_ID_SCHEMA,
                 vol.Required(CONF_BAUDRATE, default=DEFAULT_BAUDRATE): vol.In(
                     [2400, 4800, 9600, 19200, 38400]
                 ),
-                vol.Required(CONF_PARITY, default=DEFAULT_PARITY): vol.In(
-                    ["N", "E", "O"]
-                ),
-                vol.Required(CONF_STOPBITS, default=DEFAULT_STOPBITS): vol.In(
-                    [1, 2]
-                ),
-                vol.Required(CONF_BYTESIZE, default=DEFAULT_BYTESIZE): vol.In(
-                    [7, 8]
-                ),
+                vol.Required(CONF_PARITY, default=DEFAULT_PARITY): vol.In(["N", "E", "O"]),
+                vol.Required(CONF_STOPBITS, default=DEFAULT_STOPBITS): vol.In([1, 2]),
+                vol.Required(CONF_BYTESIZE, default=DEFAULT_BYTESIZE): vol.In([7, 8]),
             }
         )
+        return self.async_show_form(
+            step_id="serial",
+            data_schema=self.add_suggested_values_to_schema(data_schema, user_input),
+            errors=errors,
+        )
+
+    async def async_step_tcp(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Handle TCP connection configuration."""
+        errors: dict[str, str] = {}
 
         if user_input is not None:
-            try:
-                await self._async_test_serial_connection(user_input)
-
-                return self.async_create_entry(
-                    title=user_input[CONF_NAME],
-                    data={
-                        CONF_CONNECTION_TYPE: CONNECTION_TYPE_SERIAL,
-                        CONF_NAME: user_input[CONF_NAME],
-                        CONF_SERIAL_PORT: user_input[CONF_SERIAL_PORT],
-                        CONF_SLAVE_ID: user_input[CONF_SLAVE_ID],
-                        CONF_BAUDRATE: user_input[CONF_BAUDRATE],
-                        CONF_PARITY: user_input[CONF_PARITY],
-                        CONF_STOPBITS: user_input[CONF_STOPBITS],
-                        CONF_BYTESIZE: user_input[CONF_BYTESIZE],
-                    },
-                )
-
-            except ConnectionError:
-                errors["base"] = "cannot_connect"
-            except ModbusException:
-                errors["base"] = "read_error"
-            except ValueError:
-                errors["base"] = "read_error"
-            except Exception as err:
-                errors["base"] = "unknown"
-                _LOGGER.exception("Unexpected error during SDM630 serial setup: %s", err)
-
-        return self.async_show_form(step_id="serial",data_schema=data_schema,errors=errors)
-
-    async def async_step_tcp(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle TCP connection configuration."""
-        errors = {}
+            data = {CONF_CONNECTION_TYPE: CONNECTION_TYPE_TCP, **user_input}
+            result = await self._async_validate_and_create(data, errors)
+            if result is not None:
+                return result
 
         data_schema = vol.Schema(
             {
@@ -173,127 +169,79 @@ class HA_SDM630ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_PORT, default=DEFAULT_TCP_PORT): vol.All(
                     vol.Coerce(int), vol.Range(min=1, max=65535)
                 ),
-                vol.Required(CONF_SLAVE_ID, default=DEFAULT_SLAVE_ID): vol.All(
-                    vol.Coerce(int), vol.Range(min=1, max=247)
-                ),
+                vol.Required(CONF_SLAVE_ID, default=DEFAULT_SLAVE_ID): _SLAVE_ID_SCHEMA,
             }
         )
+        return self.async_show_form(
+            step_id="tcp",
+            data_schema=self.add_suggested_values_to_schema(data_schema, user_input),
+            errors=errors,
+        )
 
-        if user_input is not None:
-            try:
-                await self._async_test_tcp_connection(user_input)
-
-                return self.async_create_entry(
-                    title=user_input[CONF_NAME],
-                    data={
-                        CONF_CONNECTION_TYPE: CONNECTION_TYPE_TCP,
-                        CONF_NAME: user_input[CONF_NAME],
-                        CONF_HOST: user_input[CONF_HOST],
-                        CONF_PORT: user_input[CONF_PORT],
-                        CONF_SLAVE_ID: user_input[CONF_SLAVE_ID],
-                    },
-                )
-
-            except ConnectionError:
-                errors["base"] = "cannot_connect"
-            except ModbusException:
-                errors["base"] = "read_error"
-            except ValueError:
-                errors["base"] = "read_error"
-            except Exception as err:
-                errors["base"] = "unknown"
-                _LOGGER.exception("Unexpected error during SDM630 TCP setup: %s", err)
-
-        return self.async_show_form(step_id="tcp", data_schema=data_schema, errors=errors)
-
-    async def _async_test_serial_connection(self, data: dict[str, Any]) -> None:
-        """Test serial connection to the SDM630 meter."""
-        client = None
+    async def _async_validate_and_create(
+        self, data: dict[str, Any], errors: dict[str, str]
+    ) -> ConfigFlowResult | None:
+        """Test the meter and create the entry; fill errors and return None on failure."""
+        await self.async_set_unique_id(_meter_unique_id(data))
+        self._abort_if_unique_id_configured()
         try:
-            client = AsyncModbusSerialClient(
-                port=data[CONF_SERIAL_PORT],
-                baudrate=data[CONF_BAUDRATE],
-                parity=data.get(CONF_PARITY, DEFAULT_PARITY),
-                stopbits=data.get(CONF_STOPBITS, DEFAULT_STOPBITS),
-                bytesize=data.get(CONF_BYTESIZE, DEFAULT_BYTESIZE),
-                timeout=5,
-            )
-            
-            await client.connect()
-            if not client.connected:
-                raise ConnectionError("Failed to open serial port")
-    
-            result = await client.read_input_registers(
-                address=0, count=2, device_id=data[CONF_SLAVE_ID]
-            )
-            
-            if result.isError():
-                raise ModbusException(f"Modbus read error: {result}")
-                
-            if len(result.registers) != 2:
-                raise ValueError("Invalid response: expected 2 registers")
-    
-        finally:
-            if client is not None:
-                try:
-                    client.close()
-                except Exception as err:
-                    _LOGGER.debug("Error closing Modbus Serial client: %s", err)
+            await self._async_test_connection(data)
+        except ConnectionError:
+            errors["base"] = "cannot_connect"
+        except (ModbusException, ValueError):
+            errors["base"] = "read_error"
+        except Exception:
+            errors["base"] = "unknown"
+            _LOGGER.exception("Unexpected error during SDM630 setup")
+        else:
+            return self.async_create_entry(title=data[CONF_NAME], data=data)
+        return None
 
-    async def _async_test_tcp_connection(self, data: dict[str, Any]) -> None:
-        """Test TCP connection to the SDM630 meter."""
-        client = None
+    async def _async_test_connection(self, data: dict[str, Any]) -> None:
+        """Read one register from the meter to prove the settings work."""
+        hub = get_hubs(self.hass).get(hub_key(data))
+        if hub is not None:
+            # Another meter already has this bus/gateway open: probe through it, so
+            # the port isn't opened twice and the probe doesn't collide with polling
+            async with hub.lock:
+                await self._async_probe(hub.client, data)
+            return
+
+        client = create_client(data)
         try:
-            client = AsyncModbusTcpClient(
-                host=data[CONF_HOST],
-                port=data[CONF_PORT],
-                timeout=5,
-            )
-    
-            await client.connect()
-            if not client.connected:
-                raise ConnectionError(f"Failed to connect to {data[CONF_HOST]}:{data[CONF_PORT]}")
-    
-            result = await client.read_input_registers(
-                address=0, count=2, device_id=data[CONF_SLAVE_ID]  # ← Use 'device_id' not 'slave'
-            )
-    
-            if result.isError():
-                raise ModbusException(f"Modbus read error: {result}")
-    
-            if len(result.registers) != 2:
-                raise ValueError("Invalid response: expected 2 registers")
-    
+            await self._async_probe(client, data)
         finally:
-            if client is not None:
-                try:
-                    client.close()
-                except Exception as err:
-                    _LOGGER.debug("Error closing Modbus TCP client: %s", err)
-                    
-class SDM630OptionsFlowHandler(config_entries.OptionsFlow):
-    def __init__(self, config_entry: ConfigEntry):
-        """Initialize options flow."""
-    #    self.config_entry = config_entry # this is wrong!
+            client.close()
 
-    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    @staticmethod
+    async def _async_probe(client, data: dict[str, Any]) -> None:
+        if not client.connected:
+            await client.connect()
+        if not client.connected:
+            raise ConnectionError(f"Cannot connect to {client}")
+        result = await client.read_input_registers(
+            address=0, count=2, device_id=data[CONF_SLAVE_ID]
+        )
+        if result.isError():
+            raise ModbusException(f"Modbus read error: {result}")
+        if len(result.registers) != 2:
+            raise ValueError("Invalid response: expected 2 registers")
+
+
+class SDM630OptionsFlowHandler(OptionsFlow):
+    """Options: register set, poll interval, direction correction."""
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        # Get current values from options (with defaults)
-        current_register_set = self.config_entry.options.get(
-            CONF_REGISTER_SET, DEFAULT_REGISTER_SET
-        )
-        current_interval = self.config_entry.options.get(
-            "update_interval", 10  # your default value in seconds
-        )
-
+        options = self.config_entry.options
         data_schema = vol.Schema(
             {
                 vol.Required(
                     CONF_REGISTER_SET,
-                    default=current_register_set,
+                    default=options.get(CONF_REGISTER_SET, DEFAULT_REGISTER_SET),
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=[
@@ -314,21 +262,20 @@ class SDM630OptionsFlowHandler(config_entries.OptionsFlow):
                     )
                 ),
                 vol.Required(
-                    "update_interval",
-                    default=current_interval,
+                    CONF_UPDATE_INTERVAL,
+                    default=options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
                 ): vol.All(
                     vol.Coerce(int),
                     vol.Range(min=5, max=300),  # 5 seconds to 5 minutes
                 ),
                 vol.Required(
                     CONF_INVERT_POWER,
-                    default=self.config_entry.options.get(CONF_INVERT_POWER, False),
+                    default=options.get(CONF_INVERT_POWER, False),
                 ): selector.BooleanSelector(),
                 vol.Required(
                     CONF_SWAP_IMPORT_EXPORT,
-                    default=self.config_entry.options.get(CONF_SWAP_IMPORT_EXPORT, False),
+                    default=options.get(CONF_SWAP_IMPORT_EXPORT, False),
                 ): selector.BooleanSelector(),
             }
         )
-
         return self.async_show_form(step_id="init", data_schema=data_schema)
