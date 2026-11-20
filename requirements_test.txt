@@ -1,0 +1,4 @@
+# Pinned so CI is reproducible; bump to test against a newer Home Assistant
+pytest-homeassistant-custom-component==0.13.316
+pymodbus>=3.10.0,<4
+pyserial>=3.5

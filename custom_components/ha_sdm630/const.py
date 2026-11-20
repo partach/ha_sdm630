@@ -1,5 +1,7 @@
 """Constants for the Eastron SDM630 integration."""
 
+from datetime import timedelta
+
 DOMAIN = "ha_sdm630"
 
 # Connection types
@@ -20,9 +22,35 @@ CONF_STOPBITS = "stopbits"
 CONF_BYTESIZE = "bytesize"
 CONF_UPDATE_INTERVAL = "update_interval"
 
+# Direction correction (for meters wired / clamped the wrong way round)
+CONF_INVERT_POWER = "invert_power"
+CONF_SWAP_IMPORT_EXPORT = "swap_import_export"
+
 # TCP settings
 CONF_HOST = "host"
 CONF_PORT = "port"
+CONF_FRAMER = "framer"
+FRAMER_SOCKET = "socket"  # plain Modbus TCP
+FRAMER_RTU = "rtu"  # RTU frames over TCP (many RS485-to-Ethernet converters)
+
+# Polling
+CONF_MAX_REGISTERS = "max_registers"
+DEFAULT_MAX_REGISTERS = 40  # per read request; the SDM630 accepts up to 80
+MAX_READ_GAP = 20  # unused registers a single read may span to join two blocks
+
+# Connection hardening
+MODBUS_TIMEOUT = 5  # seconds per request
+MODBUS_RETRIES = 1  # extra tries per request before giving up (pymodbus default is 3)
+MAX_CONSECUTIVE_READ_ERRORS = 2  # failed reads in a row before a poll counts as failed
+# Meter not reachable since setup: retry at this fixed pace
+STARTUP_RETRY_INTERVAL = timedelta(minutes=5)
+# Meter lost while running: wait this long after the 1st, 2nd, 3rd, 4th+ failed poll
+RUNTIME_RETRY_INTERVALS = (
+    timedelta(seconds=30),
+    timedelta(minutes=1),
+    timedelta(minutes=2),
+    timedelta(minutes=5),
+)
 
 # Defaults
 DEFAULT_SLAVE_ID = 1
@@ -32,6 +60,7 @@ DEFAULT_REGISTER_SET = "basic"
 DEFAULT_STOPBITS = 1
 DEFAULT_BYTESIZE = 8
 DEFAULT_PARITY = "N"
+DEFAULT_UPDATE_INTERVAL = 10  # seconds
 
 # Register set options
 REGISTER_SET_BASIC = "basic"
@@ -75,9 +104,9 @@ _BASIC_PLUS_REGISTERS = {
 
 _FULL_REGISTERS = {
     **_BASIC_PLUS_REGISTERS,
-    "phase_1_volt_amps_reactive": {"address": 24, "name": "Phase 1 Volt Amps Reactive", "unit": "VAr", "device_class": "reactive_power", "state_class": "measurement", "precision": 2},
-    "phase_2_volt_amps_reactive": {"address": 26, "name": "Phase 2 Volt Amps Reactive", "unit": "VAr", "device_class": "reactive_power", "state_class": "measurement", "precision": 2},
-    "phase_3_volt_amps_reactive": {"address": 28, "name": "Phase 3 Volt Amps Reactive", "unit": "VAr", "device_class": "reactive_power", "state_class": "measurement", "precision": 2},
+    "phase_1_volt_amps_reactive": {"address": 24, "name": "Phase 1 Volt Amps Reactive", "unit": "var", "device_class": "reactive_power", "state_class": "measurement", "precision": 2},
+    "phase_2_volt_amps_reactive": {"address": 26, "name": "Phase 2 Volt Amps Reactive", "unit": "var", "device_class": "reactive_power", "state_class": "measurement", "precision": 2},
+    "phase_3_volt_amps_reactive": {"address": 28, "name": "Phase 3 Volt Amps Reactive", "unit": "var", "device_class": "reactive_power", "state_class": "measurement", "precision": 2},
     "phase_1_phase_angle": {"address": 36, "name": "Phase 1 Phase Angle", "unit": "deg", "state_class": "measurement", "precision": 2},
     "phase_2_phase_angle": {"address": 38, "name": "Phase 2 Phase Angle", "unit": "deg", "state_class": "measurement", "precision": 2},
     "phase_3_phase_angle": {"address": 40, "name": "Phase 3 Phase Angle", "unit": "deg", "state_class": "measurement", "precision": 2},
@@ -85,10 +114,13 @@ _FULL_REGISTERS = {
     "average_line_current": {"address": 46, "name": "Average Line Current", "unit": "A", "device_class": "current", "state_class": "measurement", "precision": 2},
     "sum_of_line_currents": {"address": 48, "name": "Sum of Line Currents", "unit": "A", "device_class": "current", "state_class": "measurement", "precision": 2},
     "total_system_volt_amps": {"address": 56, "name": "Total System Volt Amps", "unit": "VA", "device_class": "apparent_power", "state_class": "measurement", "precision": 2},
-    "total_system_var": {"address": 60, "name": "Total System VAr", "unit": "VAr", "device_class": "reactive_power", "state_class": "measurement", "precision": 2,"word_order": "BA"},
+    "total_system_var": {"address": 60, "name": "Total System VAr", "unit": "var", "device_class": "reactive_power", "state_class": "measurement", "precision": 2,
+        # Documented as normal (AB) order, but was seen swapped in the field: pick
+        # the order that matches the sum of the three phases
+        "word_order": "auto", "check_sum_of": ("phase_1_volt_amps_reactive", "phase_2_volt_amps_reactive", "phase_3_volt_amps_reactive")},
     "total_system_power_factor": {"address": 62, "name": "Total System Power Factor", "unit": None, "device_class": "power_factor", "state_class": "measurement", "precision": 3},
     "total_system_phase_angle": {"address": 66, "name": "Total System Phase Angle", "unit": "deg", "state_class": "measurement", "precision": 2},
-    "vah_since_last_reset": {"address": 80, "name": "VAh Since Last Reset", "unit": "kVAh", "device_class": "energy", "state_class": "total_increasing", "precision": 2},
+    "vah_since_last_reset": {"address": 80, "name": "VAh Since Last Reset", "unit": "kVAh", "device_class": None, "state_class": "total_increasing", "precision": 2},
     "ah_since_last_reset": {"address": 82, "name": "Ah Since Last Reset", "unit": "Ah", "state_class": "total_increasing", "precision": 2},
     "total_system_power_demand": {"address": 84, "name": "Total System Power Demand", "unit": "W", "device_class": "power", "state_class": "measurement", "precision": 2},
     "maximum_total_system_power_demand": {"address": 86, "name": "Maximum Total System Power Demand", "unit": "W", "device_class": "power", "state_class": "measurement", "precision": 2},
@@ -135,6 +167,26 @@ _FULL_REGISTERS = {
     "l2_total_reactive_energy": {"address": 378, "name": "L2 Total Reactive Energy", "unit": "kVArh", "device_class": None, "state_class": "total", "precision": 2},
     "l3_total_reactive_energy": {"address": 380, "name": "L3 Total Reactive Energy", "unit": "kVArh", "device_class": None, "state_class": "total", "precision": 2},
 }
+
+# Signed active power registers that flip sign when current flows the other way
+INVERTIBLE_POWER_KEYS = (
+    "phase_1_power",
+    "phase_2_power",
+    "phase_3_power",
+    "total_system_power",
+)
+
+# Import/export counter pairs that trade places when current flows the other way
+IMPORT_EXPORT_PAIRS = (
+    ("import_energy", "export_energy"),
+    ("import_varh_since_last_reset", "export_varh_since_last_reset"),
+    ("l1_import_active_energy", "l1_export_active_energy"),
+    ("l2_import_active_energy", "l2_export_active_energy"),
+    ("l3_import_active_energy", "l3_export_active_energy"),
+    ("l1_import_reactive_energy", "l1_export_reactive_energy"),
+    ("l2_import_reactive_energy", "l2_export_reactive_energy"),
+    ("l3_import_reactive_energy", "l3_export_reactive_energy"),
+)
 
 REGISTER_SETS = {
     REGISTER_SET_BASIC: _BASIC_REGISTERS,

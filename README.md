@@ -53,6 +53,42 @@ Let the install config of the integration guide you as it asks you for the neede
   <em>Serial Example, choose the settings you need</em>
 </p>
 
+### Options (after setup)
+Open the integration and click **Configure** to change:
+- **Register set**: basic, basic plus or full.
+- **Update interval**: polling time in seconds (5 to 300).
+- **Registers per read request** (default 40): values that sit close together are fetched in one request, so a poll needs 3 requests (Basic) to 7 (Full) instead of 10 to 46. If your gateway has trouble with long reads, lower it; 4 gives the behaviour of version 0.3.4 and earlier. If the meter refuses a long read, the integration falls back to reading those values one by one automatically.
+- **Invert power sign**: use this if the meter shows negative power while it is drawing power (in/out wires or clamps swapped). Phase and total power are multiplied by -1.
+- **Swap import and export counters**: for the same wiring problem, report the meter's export counters as import and the other way round.
+
+Changing the swap option makes the import and export sensors jump to each other's values. Home Assistant records that jump in its long-term statistics, so if one of those sensors is already in the Energy dashboard, fix the spike in **Developer Tools > Statistics** or keep using the counter you already had and turn only *Invert power sign* on.
+
+### Changing the connection
+To move a meter to another USB port, IP address or Modbus address, open the integration, click the three dots and choose **Reconfigure**. The new settings are tested before they are saved, and the sensors and their history stay as they are.
+
+### TCP: Modbus TCP or RTU over TCP
+A real Modbus TCP gateway uses *Modbus TCP*. Many cheap RS485-to-Ethernet converters (in "transparent" mode) just pass the RS485 traffic through; choose *RTU over TCP* for those.
+
+### When the meter can't be reached
+- **At startup** (bus not powered, USB adapter missing, gateway down): the integration still loads, its sensors show *unavailable*, and it tries to connect again every 5 minutes.
+- **While running**: it retries after 30 s, 1 min, 2 min and then every 5 min until the meter answers again. You get one error in the log when the connection drops and one message when it is back, not a line for every attempt.
+
+### Debug logging
+The integration keeps the pymodbus library quiet unless you set its log level yourself, for example:
+```yaml
+logger:
+  logs:
+    custom_components.ha_sdm630: debug
+    pymodbus: warning
+```
+
+## Development
+Tests run against a simulated meter:
+```bash
+pip install -r requirements_test.txt
+pytest
+```
+
 ## Discussion 
 See [here](https://github.com/partach/ha_sdm630/discussions)
 
