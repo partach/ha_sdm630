@@ -20,6 +20,7 @@
 - Total System VAr: word order is detected automatically by comparing with the three phases (was hard-coded swapped)
 - pymodbus log level is no longer forced when you configured one yourself
 - Test suite (simulated meter) and a CI job that runs it
+- Integration icon (`brand/icon.png`), which the HACS validation requires
 - Option "Invert power sign": flips phase and total power for meters wired or clamped the wrong way round
 - Option "Swap import and export counters": reports export energy as import and vice versa
 - Labels and help text for the options form
