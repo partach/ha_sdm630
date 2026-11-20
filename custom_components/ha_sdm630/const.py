@@ -29,6 +29,14 @@ CONF_SWAP_IMPORT_EXPORT = "swap_import_export"
 # TCP settings
 CONF_HOST = "host"
 CONF_PORT = "port"
+CONF_FRAMER = "framer"
+FRAMER_SOCKET = "socket"  # plain Modbus TCP
+FRAMER_RTU = "rtu"  # RTU frames over TCP (many RS485-to-Ethernet converters)
+
+# Polling
+CONF_MAX_REGISTERS = "max_registers"
+DEFAULT_MAX_REGISTERS = 40  # per read request; the SDM630 accepts up to 80
+MAX_READ_GAP = 20  # unused registers a single read may span to join two blocks
 
 # Connection hardening
 MODBUS_TIMEOUT = 5  # seconds per request
@@ -106,7 +114,10 @@ _FULL_REGISTERS = {
     "average_line_current": {"address": 46, "name": "Average Line Current", "unit": "A", "device_class": "current", "state_class": "measurement", "precision": 2},
     "sum_of_line_currents": {"address": 48, "name": "Sum of Line Currents", "unit": "A", "device_class": "current", "state_class": "measurement", "precision": 2},
     "total_system_volt_amps": {"address": 56, "name": "Total System Volt Amps", "unit": "VA", "device_class": "apparent_power", "state_class": "measurement", "precision": 2},
-    "total_system_var": {"address": 60, "name": "Total System VAr", "unit": "var", "device_class": "reactive_power", "state_class": "measurement", "precision": 2, "word_order": "BA"},
+    "total_system_var": {"address": 60, "name": "Total System VAr", "unit": "var", "device_class": "reactive_power", "state_class": "measurement", "precision": 2,
+        # Documented as normal (AB) order, but was seen swapped in the field: pick
+        # the order that matches the sum of the three phases
+        "word_order": "auto", "check_sum_of": ("phase_1_volt_amps_reactive", "phase_2_volt_amps_reactive", "phase_3_volt_amps_reactive")},
     "total_system_power_factor": {"address": 62, "name": "Total System Power Factor", "unit": None, "device_class": "power_factor", "state_class": "measurement", "precision": 3},
     "total_system_phase_angle": {"address": 66, "name": "Total System Phase Angle", "unit": "deg", "state_class": "measurement", "precision": 2},
     "vah_since_last_reset": {"address": 80, "name": "VAh Since Last Reset", "unit": "kVAh", "device_class": None, "state_class": "total_increasing", "precision": 2},

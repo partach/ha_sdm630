@@ -10,10 +10,12 @@ from homeassistant.core import HomeAssistant
 
 from .const import (
     CONF_INVERT_POWER,
+    CONF_MAX_REGISTERS,
     CONF_REGISTER_SET,
     CONF_SLAVE_ID,
     CONF_SWAP_IMPORT_EXPORT,
     CONF_UPDATE_INTERVAL,
+    DEFAULT_MAX_REGISTERS,
     DEFAULT_REGISTER_SET,
     DEFAULT_UPDATE_INTERVAL,
     REGISTER_SET_BASIC,
@@ -48,6 +50,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SDM630ConfigEntry) -> bo
         lock=hub.lock,
         config_entry=entry,
         name=f"SDM630 {entry.title}",
+        max_registers=entry.options.get(CONF_MAX_REGISTERS, DEFAULT_MAX_REGISTERS),
     )
     coordinator.hub = hub
 

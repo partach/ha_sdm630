@@ -8,12 +8,14 @@ from collections.abc import Mapping
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+from pymodbus import FramerType
 from pymodbus.client import AsyncModbusSerialClient, AsyncModbusTcpClient
 
 from .const import (
     CONF_BAUDRATE,
     CONF_BYTESIZE,
     CONF_CONNECTION_TYPE,
+    CONF_FRAMER,
     CONF_HOST,
     CONF_PARITY,
     CONF_PORT,
@@ -26,6 +28,8 @@ from .const import (
     DEFAULT_STOPBITS,
     DEFAULT_TCP_PORT,
     DOMAIN,
+    FRAMER_RTU,
+    FRAMER_SOCKET,
     MODBUS_RETRIES,
     MODBUS_TIMEOUT,
 )
@@ -60,7 +64,10 @@ def hub_key(data: Mapping[str, Any]) -> str:
             f"_{data.get(CONF_PARITY, DEFAULT_PARITY)}_{data.get(CONF_STOPBITS, DEFAULT_STOPBITS)}"
             f"_{data.get(CONF_BYTESIZE, DEFAULT_BYTESIZE)}"
         )
-    return f"tcp_{data[CONF_HOST]}_{data.get(CONF_PORT, DEFAULT_TCP_PORT)}"
+    return (
+        f"tcp_{data[CONF_HOST]}_{data.get(CONF_PORT, DEFAULT_TCP_PORT)}"
+        f"_{data.get(CONF_FRAMER, FRAMER_SOCKET)}"
+    )
 
 
 def create_client(data: Mapping[str, Any]) -> AsyncModbusSerialClient | AsyncModbusTcpClient:
@@ -79,6 +86,8 @@ def create_client(data: Mapping[str, Any]) -> AsyncModbusSerialClient | AsyncMod
     return AsyncModbusTcpClient(
         host=data[CONF_HOST],
         port=data.get(CONF_PORT, DEFAULT_TCP_PORT),
+        # RS485-to-Ethernet converters in "transparent" mode pass raw RTU frames
+        framer=FramerType.RTU if data.get(CONF_FRAMER) == FRAMER_RTU else FramerType.SOCKET,
         **common,
     )
 

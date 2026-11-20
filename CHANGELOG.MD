@@ -13,6 +13,13 @@
 - Switching to a smaller register set removes the sensors that are no longer read
 - Code clean-up: shared hub module, `entry.runtime_data`, entity naming per HA guidelines (entity IDs unchanged), lint passes in CI
 - manifest: `pyserial` listed as requirement, pymodbus capped below 4.0
+- Faster polling: values close together are read in one request (Basic 10 -> 3 requests, Full 46 -> 7); new option "Registers per read request"; automatic fallback to single reads when the meter rejects a range
+- A read that fails once is retried after reconnecting instead of being skipped for that poll
+- TCP: new "RTU over TCP" protocol for transparent RS485-to-Ethernet converters
+- Reconfigure: change port, host or Modbus address of an existing meter without losing sensors or history
+- Total System VAr: word order is detected automatically by comparing with the three phases (was hard-coded swapped)
+- pymodbus log level is no longer forced when you configured one yourself
+- Test suite (simulated meter) and a CI job that runs it
 - Option "Invert power sign": flips phase and total power for meters wired or clamped the wrong way round
 - Option "Swap import and export counters": reports export energy as import and vice versa
 - Labels and help text for the options form

@@ -30,12 +30,45 @@
           "name": "Name",
           "host": "Host",
           "port": "Port",
-          "slave_id": "Modbus address (slave ID)"
+          "slave_id": "Modbus address (slave ID)",
+          "framer": "Protocol"
         },
         "data_description": {
           "host": "IP address or hostname of the Modbus TCP gateway.",
-          "slave_id": "Address of the meter behind the gateway (default 1)."
+          "slave_id": "Address of the meter behind the gateway (default 1).",
+          "framer": "Modbus TCP for real Modbus TCP gateways. Choose RTU over TCP for RS485-to-Ethernet converters in transparent mode (common on cheap converters)."
         }
+      },
+      "reconfigure_serial": {
+        "title": "Change serial (RS485) connection",
+        "data": {
+          "serial_port": "Serial port",
+          "slave_id": "Modbus address (slave ID)",
+          "baudrate": "Baud rate",
+          "parity": "Parity",
+          "stopbits": "Stop bits",
+          "bytesize": "Data bits"
+        },
+        "data_description": {
+          "serial_port": "Pick the USB/RS485 adapter or type a path. /dev/serial/by-id/... paths keep working when adapters are re-plugged.",
+          "slave_id": "Set on the meter (default 1). Every meter on one bus needs its own address."
+        },
+        "description": "The connection is tested before it is saved. Sensors and history are kept."
+      },
+      "reconfigure_tcp": {
+        "title": "Change modbus TCP connection",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "slave_id": "Modbus address (slave ID)",
+          "framer": "Protocol"
+        },
+        "data_description": {
+          "host": "IP address or hostname of the Modbus TCP gateway.",
+          "slave_id": "Address of the meter behind the gateway (default 1).",
+          "framer": "Modbus TCP for real Modbus TCP gateways. Choose RTU over TCP for RS485-to-Ethernet converters in transparent mode (common on cheap converters)."
+        },
+        "description": "The connection is tested before it is saved. Sensors and history are kept."
       }
     },
     "error": {
@@ -44,7 +77,8 @@
       "unknown": "Unexpected error, see the Home Assistant log."
     },
     "abort": {
-      "already_configured": "This meter (same connection and Modbus address) is already set up."
+      "already_configured": "This meter (same connection and Modbus address) is already set up.",
+      "reconfigure_successful": "The connection has been updated."
     }
   },
   "options": {
@@ -54,12 +88,14 @@
         "data": {
           "register_set": "Register set",
           "update_interval": "Update interval (seconds)",
+          "max_registers": "Registers per read request",
           "invert_power": "Invert power sign",
           "swap_import_export": "Swap import and export counters"
         },
         "data_description": {
           "invert_power": "Flip the sign of the phase and total power readings. Use this when the meter shows negative power while drawing power, e.g. because the in/out wires or clamps are reversed.",
-          "swap_import_export": "Report the meter's export counters as import and vice versa (active and reactive). Note: the counter values jump when you change this, which Home Assistant's long-term statistics will record."
+          "swap_import_export": "Report the meter's export counters as import and vice versa (active and reactive). Note: the counter values jump when you change this, which Home Assistant's long-term statistics will record.",
+          "max_registers": "Values close together are fetched in one request (fewer requests, faster polling). Lower this if your gateway struggles with long reads; 4 matches the behaviour of version 0.3.4 and earlier."
         }
       }
     }

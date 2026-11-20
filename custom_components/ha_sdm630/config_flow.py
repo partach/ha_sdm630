@@ -9,7 +9,12 @@ from typing import Any
 
 import serial.tools.list_ports
 import voluptuous as vol
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
+from homeassistant.config_entries import (
+    SOURCE_RECONFIGURE,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
 from homeassistant.helpers import selector
@@ -19,8 +24,10 @@ from .const import (
     CONF_BAUDRATE,
     CONF_BYTESIZE,
     CONF_CONNECTION_TYPE,
+    CONF_FRAMER,
     CONF_HOST,
     CONF_INVERT_POWER,
+    CONF_MAX_REGISTERS,
     CONF_PARITY,
     CONF_PORT,
     CONF_REGISTER_SET,
@@ -33,6 +40,7 @@ from .const import (
     CONNECTION_TYPE_TCP,
     DEFAULT_BAUDRATE,
     DEFAULT_BYTESIZE,
+    DEFAULT_MAX_REGISTERS,
     DEFAULT_PARITY,
     DEFAULT_REGISTER_SET,
     DEFAULT_SLAVE_ID,
@@ -40,6 +48,8 @@ from .const import (
     DEFAULT_TCP_PORT,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
+    FRAMER_RTU,
+    FRAMER_SOCKET,
     REGISTER_SET_BASIC,
     REGISTER_SET_BASIC_PLUS,
     REGISTER_SET_FULL,
@@ -51,6 +61,10 @@ _LOGGER = logging.getLogger(__name__)
 _SERIAL_BY_ID = "/dev/serial/by-id"
 
 _SLAVE_ID_SCHEMA = vol.All(vol.Coerce(int), vol.Range(min=1, max=247))
+
+# Connection fields per connection type (everything except the name)
+_SERIAL_FIELDS = (CONF_SERIAL_PORT, CONF_SLAVE_ID, CONF_BAUDRATE, CONF_PARITY, CONF_STOPBITS, CONF_BYTESIZE)
+_TCP_FIELDS = (CONF_HOST, CONF_PORT, CONF_FRAMER, CONF_SLAVE_ID)
 
 
 def _list_serial_ports() -> list[selector.SelectOptionDict]:
@@ -72,6 +86,55 @@ def _list_serial_ports() -> list[selector.SelectOptionDict]:
             label += f" ({port.manufacturer})"
         options.append(selector.SelectOptionDict(value=path, label=label))
     return sorted(options, key=lambda option: option["value"])
+
+
+def _serial_schema(port_options: list[selector.SelectOptionDict], with_name: bool) -> vol.Schema:
+    fields: dict[Any, Any] = {}
+    if with_name:
+        fields[vol.Required(CONF_NAME, default="SDM630")] = str
+    fields.update(
+        {
+            vol.Required(CONF_SERIAL_PORT): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=port_options,
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                    # Allow typing a path that isn't listed
+                    custom_value=True,
+                )
+            ),
+            vol.Required(CONF_SLAVE_ID, default=DEFAULT_SLAVE_ID): _SLAVE_ID_SCHEMA,
+            vol.Required(CONF_BAUDRATE, default=DEFAULT_BAUDRATE): vol.In([2400, 4800, 9600, 19200, 38400]),
+            vol.Required(CONF_PARITY, default=DEFAULT_PARITY): vol.In(["N", "E", "O"]),
+            vol.Required(CONF_STOPBITS, default=DEFAULT_STOPBITS): vol.In([1, 2]),
+            vol.Required(CONF_BYTESIZE, default=DEFAULT_BYTESIZE): vol.In([7, 8]),
+        }
+    )
+    return vol.Schema(fields)
+
+
+def _tcp_schema(with_name: bool) -> vol.Schema:
+    fields: dict[Any, Any] = {}
+    if with_name:
+        fields[vol.Required(CONF_NAME, default="SDM630")] = str
+    fields.update(
+        {
+            vol.Required(CONF_HOST): str,
+            vol.Required(CONF_PORT, default=DEFAULT_TCP_PORT): vol.All(
+                vol.Coerce(int), vol.Range(min=1, max=65535)
+            ),
+            vol.Required(CONF_FRAMER, default=FRAMER_SOCKET): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        selector.SelectOptionDict(value=FRAMER_SOCKET, label="Modbus TCP"),
+                        selector.SelectOptionDict(value=FRAMER_RTU, label="RTU over TCP (transparent RS485 converter)"),
+                    ],
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            ),
+            vol.Required(CONF_SLAVE_ID, default=DEFAULT_SLAVE_ID): _SLAVE_ID_SCHEMA,
+        }
+    )
+    return vol.Schema(fields)
 
 
 def _meter_unique_id(data: Mapping[str, Any]) -> str:
@@ -105,7 +168,7 @@ class HA_SDM630ConfigFlow(ConfigFlow, domain=DOMAIN):
                     selector.SelectSelectorConfig(
                         options=[
                             selector.SelectOptionDict(value=CONNECTION_TYPE_SERIAL, label="Serial (RS485)"),
-                            selector.SelectOptionDict(value=CONNECTION_TYPE_TCP, label="TCP/IP (Modbus TCP)"),
+                            selector.SelectOptionDict(value=CONNECTION_TYPE_TCP, label="TCP/IP (Modbus TCP gateway)"),
                         ],
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
@@ -116,74 +179,74 @@ class HA_SDM630ConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_serial(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle serial connection configuration."""
-        errors: dict[str, str] = {}
-
-        if user_input is not None:
-            data = {CONF_CONNECTION_TYPE: CONNECTION_TYPE_SERIAL, **user_input}
-            result = await self._async_validate_and_create(data, errors)
-            if result is not None:
-                return result
-
-        # Discover serial ports every time (in case plugged/unplugged)
-        port_options = await self.hass.async_add_executor_job(_list_serial_ports)
-        data_schema = vol.Schema(
-            {
-                vol.Required(CONF_NAME, default="SDM630"): str,
-                vol.Required(CONF_SERIAL_PORT): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=port_options,
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                        # Allow typing a path that isn't listed
-                        custom_value=True,
-                    )
-                ),
-                vol.Required(CONF_SLAVE_ID, default=DEFAULT_SLAVE_ID): _SLAVE_ID_SCHEMA,
-                vol.Required(CONF_BAUDRATE, default=DEFAULT_BAUDRATE): vol.In(
-                    [2400, 4800, 9600, 19200, 38400]
-                ),
-                vol.Required(CONF_PARITY, default=DEFAULT_PARITY): vol.In(["N", "E", "O"]),
-                vol.Required(CONF_STOPBITS, default=DEFAULT_STOPBITS): vol.In([1, 2]),
-                vol.Required(CONF_BYTESIZE, default=DEFAULT_BYTESIZE): vol.In([7, 8]),
-            }
-        )
-        return self.async_show_form(
-            step_id="serial",
-            data_schema=self.add_suggested_values_to_schema(data_schema, user_input),
-            errors=errors,
-        )
+        return await self._async_connection_step("serial", CONNECTION_TYPE_SERIAL, user_input)
 
     async def async_step_tcp(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle TCP connection configuration."""
+        return await self._async_connection_step("tcp", CONNECTION_TYPE_TCP, user_input)
+
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Change the connection of an existing meter (port, host, address, ...)."""
+        entry = self._get_reconfigure_entry()
+        if entry.data[CONF_CONNECTION_TYPE] == CONNECTION_TYPE_SERIAL:
+            return await self._async_connection_step("reconfigure_serial", CONNECTION_TYPE_SERIAL, user_input)
+        return await self._async_connection_step("reconfigure_tcp", CONNECTION_TYPE_TCP, user_input)
+
+    async def async_step_reconfigure_serial(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Submit target of the serial reconfigure form."""
+        return await self._async_connection_step("reconfigure_serial", CONNECTION_TYPE_SERIAL, user_input)
+
+    async def async_step_reconfigure_tcp(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Submit target of the TCP reconfigure form."""
+        return await self._async_connection_step("reconfigure_tcp", CONNECTION_TYPE_TCP, user_input)
+
+    async def _async_connection_step(
+        self, step_id: str, connection_type: str, user_input: dict[str, Any] | None
+    ) -> ConfigFlowResult:
+        """Show/validate a serial or TCP form, for a new meter or a reconfigure."""
+        reconfigure = self.source == SOURCE_RECONFIGURE
+        entry = self._get_reconfigure_entry() if reconfigure else None
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            data = {CONF_CONNECTION_TYPE: CONNECTION_TYPE_TCP, **user_input}
-            result = await self._async_validate_and_create(data, errors)
-            if result is not None:
-                return result
+            data = {CONF_CONNECTION_TYPE: connection_type, **user_input}
+            unique_id = _meter_unique_id(data)
+            if reconfigure:
+                if any(
+                    other.unique_id == unique_id and other.entry_id != entry.entry_id
+                    for other in self._async_current_entries(include_ignore=False)
+                ):
+                    return self.async_abort(reason="already_configured")
+            else:
+                await self.async_set_unique_id(unique_id)
+                self._abort_if_unique_id_configured()
 
-        data_schema = vol.Schema(
-            {
-                vol.Required(CONF_NAME, default="SDM630"): str,
-                vol.Required(CONF_HOST): str,
-                vol.Required(CONF_PORT, default=DEFAULT_TCP_PORT): vol.All(
-                    vol.Coerce(int), vol.Range(min=1, max=65535)
-                ),
-                vol.Required(CONF_SLAVE_ID, default=DEFAULT_SLAVE_ID): _SLAVE_ID_SCHEMA,
-            }
-        )
+            if await self._async_validate(data, errors):
+                if reconfigure:
+                    return self.async_update_reload_and_abort(
+                        entry, unique_id=unique_id, data_updates=user_input
+                    )
+                return self.async_create_entry(title=data[CONF_NAME], data=data)
+
+        if connection_type == CONNECTION_TYPE_SERIAL:
+            # Discover serial ports every time (in case plugged/unplugged)
+            port_options = await self.hass.async_add_executor_job(_list_serial_ports)
+            schema = _serial_schema(port_options, with_name=not reconfigure)
+        else:
+            schema = _tcp_schema(with_name=not reconfigure)
+
+        suggested = user_input
+        if suggested is None and entry is not None:
+            fields = _SERIAL_FIELDS if connection_type == CONNECTION_TYPE_SERIAL else _TCP_FIELDS
+            suggested = {key: entry.data[key] for key in fields if key in entry.data}
         return self.async_show_form(
-            step_id="tcp",
-            data_schema=self.add_suggested_values_to_schema(data_schema, user_input),
+            step_id=step_id,
+            data_schema=self.add_suggested_values_to_schema(schema, suggested),
             errors=errors,
         )
 
-    async def _async_validate_and_create(
-        self, data: dict[str, Any], errors: dict[str, str]
-    ) -> ConfigFlowResult | None:
-        """Test the meter and create the entry; fill errors and return None on failure."""
-        await self.async_set_unique_id(_meter_unique_id(data))
-        self._abort_if_unique_id_configured()
+    async def _async_validate(self, data: dict[str, Any], errors: dict[str, str]) -> bool:
+        """Test the meter; fill errors and return False on failure."""
         try:
             await self._async_test_connection(data)
         except ConnectionError:
@@ -194,15 +257,15 @@ class HA_SDM630ConfigFlow(ConfigFlow, domain=DOMAIN):
             errors["base"] = "unknown"
             _LOGGER.exception("Unexpected error during SDM630 setup")
         else:
-            return self.async_create_entry(title=data[CONF_NAME], data=data)
-        return None
+            return True
+        return False
 
     async def _async_test_connection(self, data: dict[str, Any]) -> None:
         """Read one register from the meter to prove the settings work."""
         hub = get_hubs(self.hass).get(hub_key(data))
         if hub is not None:
-            # Another meter already has this bus/gateway open: probe through it, so
-            # the port isn't opened twice and the probe doesn't collide with polling
+            # This bus/gateway is already open: probe through it, so the port
+            # isn't opened twice and the probe doesn't collide with polling
             async with hub.lock:
                 await self._async_probe(hub.client, data)
             return
@@ -229,7 +292,7 @@ class HA_SDM630ConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class SDM630OptionsFlowHandler(OptionsFlow):
-    """Options: register set, poll interval, direction correction."""
+    """Options: register set, polling, direction correction."""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Manage the options."""
@@ -268,6 +331,10 @@ class SDM630OptionsFlowHandler(OptionsFlow):
                     vol.Coerce(int),
                     vol.Range(min=5, max=300),  # 5 seconds to 5 minutes
                 ),
+                vol.Required(
+                    CONF_MAX_REGISTERS,
+                    default=options.get(CONF_MAX_REGISTERS, DEFAULT_MAX_REGISTERS),
+                ): vol.All(vol.Coerce(int), vol.Range(min=2, max=80)),
                 vol.Required(
                     CONF_INVERT_POWER,
                     default=options.get(CONF_INVERT_POWER, False),
