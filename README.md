@@ -62,6 +62,10 @@ Open the integration and click **Configure** to change:
 
 Changing the swap option makes the import and export sensors jump to each other's values. Home Assistant records that jump in its long-term statistics, so if one of those sensors is already in the Energy dashboard, fix the spike in **Developer Tools > Statistics** or keep using the counter you already had and turn only *Invert power sign* on.
 
+### When the meter can't be reached
+- **At startup** (bus not powered, USB adapter missing, gateway down): the integration still loads, its sensors show *unavailable*, and it tries to connect again every 5 minutes.
+- **While running**: it retries after 30 s, 1 min, 2 min and then every 5 min until the meter answers again. You get one error in the log when the connection drops and one message when it is back, not a line for every attempt.
+
 ## Discussion 
 See [here](https://github.com/partach/ha_sdm630/discussions)
 

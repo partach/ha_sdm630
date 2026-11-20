@@ -5,8 +5,10 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from pymodbus.client import AsyncModbusSerialClient, AsyncModbusTcpClient
+import asyncio
 from datetime import timedelta
+
+from pymodbus.client import AsyncModbusSerialClient, AsyncModbusTcpClient
 
 from .const import (
     DOMAIN,
@@ -29,6 +31,8 @@ from .const import (
     DEFAULT_PARITY,
     DEFAULT_REGISTER_SET,
     DEFAULT_STOPBITS,
+    MODBUS_RETRIES,
+    MODBUS_TIMEOUT,
     REGISTER_SETS,
     REGISTER_SET_BASIC,
 )
@@ -80,6 +84,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         timedelta(seconds=update_interval),
         invert_power=entry.options.get(CONF_INVERT_POWER, False),
         swap_import_export=entry.options.get(CONF_SWAP_IMPORT_EXPORT, False),
+        lock=hub.lock,
+        config_entry=entry,
+        name=f"SDM630 {entry.title}",
     )
     # Store config and hub_key for unload cleanup
     coordinator.config = config
@@ -87,8 +94,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.async_on_unload(entry.add_update_listener(update_listener))
 
-    # First data refresh
-    await coordinator.async_config_entry_first_refresh()
+    # First data refresh. Don't fail setup when the meter is unreachable (bus not
+    # powered yet, USB adapter missing, gateway down): the sensors start as
+    # unavailable and the coordinator retries every STARTUP_RETRY_INTERVAL.
+    await coordinator.async_refresh()
 
     # Store coordinator
     hass.data[DOMAIN][entry.entry_id] = coordinator
@@ -161,8 +170,12 @@ class SDM630SerialHub:
             parity=parity,
             stopbits=stopbits,
             bytesize=bytesize,
-            timeout=5,
+            timeout=MODBUS_TIMEOUT,
+            retries=MODBUS_RETRIES,
+            # Reconnecting is handled by the coordinator (with backoff)
+            reconnect_delay=0,
         )
+        self.lock = asyncio.Lock()
 
     async def close(self):
         """Close the connection safely."""
@@ -191,8 +204,12 @@ class SDM630TcpHub:
         self.client = AsyncModbusTcpClient(
             host=host,
             port=port,
-            timeout=5,
+            timeout=MODBUS_TIMEOUT,
+            retries=MODBUS_RETRIES,
+            # Reconnecting is handled by the coordinator (with backoff)
+            reconnect_delay=0,
         )
+        self.lock = asyncio.Lock()
 
     async def close(self):
         """Close the connection safely."""

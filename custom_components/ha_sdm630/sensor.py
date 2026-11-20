@@ -41,9 +41,9 @@ class HA_SDM630Sensor(CoordinatorEntity, SensorEntity):  # ← Inherit from Coor
     @property
     def native_value(self):
         """Return the state of the sensor."""
-        return self.coordinator.data.get(self._key)
+        return (self.coordinator.data or {}).get(self._key)
 
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        return self.coordinator.last_update_success and self.coordinator.data.get(self._key) is not None
+        return self.coordinator.last_update_success and self.native_value is not None

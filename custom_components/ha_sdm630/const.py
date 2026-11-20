@@ -1,5 +1,7 @@
 """Constants for the Eastron SDM630 integration."""
 
+from datetime import timedelta
+
 DOMAIN = "ha_sdm630"
 
 # Connection types
@@ -27,6 +29,20 @@ CONF_SWAP_IMPORT_EXPORT = "swap_import_export"
 # TCP settings
 CONF_HOST = "host"
 CONF_PORT = "port"
+
+# Connection hardening
+MODBUS_TIMEOUT = 5  # seconds per request
+MODBUS_RETRIES = 1  # extra tries per request before giving up (pymodbus default is 3)
+MAX_CONSECUTIVE_READ_ERRORS = 2  # failed reads in a row before a poll counts as failed
+# Meter not reachable since setup: retry at this fixed pace
+STARTUP_RETRY_INTERVAL = timedelta(minutes=5)
+# Meter lost while running: wait this long after the 1st, 2nd, 3rd, 4th+ failed poll
+RUNTIME_RETRY_INTERVALS = (
+    timedelta(seconds=30),
+    timedelta(minutes=1),
+    timedelta(minutes=2),
+    timedelta(minutes=5),
+)
 
 # Defaults
 DEFAULT_SLAVE_ID = 1
