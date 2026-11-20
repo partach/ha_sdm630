@@ -20,6 +20,10 @@ CONF_STOPBITS = "stopbits"
 CONF_BYTESIZE = "bytesize"
 CONF_UPDATE_INTERVAL = "update_interval"
 
+# Direction correction (for meters wired / clamped the wrong way round)
+CONF_INVERT_POWER = "invert_power"
+CONF_SWAP_IMPORT_EXPORT = "swap_import_export"
+
 # TCP settings
 CONF_HOST = "host"
 CONF_PORT = "port"
@@ -135,6 +139,26 @@ _FULL_REGISTERS = {
     "l2_total_reactive_energy": {"address": 378, "name": "L2 Total Reactive Energy", "unit": "kVArh", "device_class": None, "state_class": "total", "precision": 2},
     "l3_total_reactive_energy": {"address": 380, "name": "L3 Total Reactive Energy", "unit": "kVArh", "device_class": None, "state_class": "total", "precision": 2},
 }
+
+# Signed active power registers that flip sign when current flows the other way
+INVERTIBLE_POWER_KEYS = (
+    "phase_1_power",
+    "phase_2_power",
+    "phase_3_power",
+    "total_system_power",
+)
+
+# Import/export counter pairs that trade places when current flows the other way
+IMPORT_EXPORT_PAIRS = (
+    ("import_energy", "export_energy"),
+    ("import_varh_since_last_reset", "export_varh_since_last_reset"),
+    ("l1_import_active_energy", "l1_export_active_energy"),
+    ("l2_import_active_energy", "l2_export_active_energy"),
+    ("l3_import_active_energy", "l3_export_active_energy"),
+    ("l1_import_reactive_energy", "l1_export_reactive_energy"),
+    ("l2_import_reactive_energy", "l2_export_reactive_energy"),
+    ("l3_import_reactive_energy", "l3_export_reactive_energy"),
+)
 
 REGISTER_SETS = {
     REGISTER_SET_BASIC: _BASIC_REGISTERS,

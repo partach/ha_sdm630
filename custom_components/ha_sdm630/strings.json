@@ -1,0 +1,19 @@
+{
+  "options": {
+    "step": {
+      "init": {
+        "title": "SDM630 options",
+        "data": {
+          "register_set": "Register set",
+          "update_interval": "Update interval (seconds)",
+          "invert_power": "Invert power sign",
+          "swap_import_export": "Swap import and export counters"
+        },
+        "data_description": {
+          "invert_power": "Flip the sign of the phase and total power readings. Use this when the meter shows negative power while drawing power, e.g. because the in/out wires or clamps are reversed.",
+          "swap_import_export": "Report the meter's export counters as import and vice versa (active and reactive). Note: the counter values jump when you change this, which Home Assistant's long-term statistics will record."
+        }
+      }
+    }
+  }
+}

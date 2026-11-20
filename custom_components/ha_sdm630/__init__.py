@@ -21,6 +21,8 @@ from .const import (
     CONF_STOPBITS,
     CONF_REGISTER_SET,
     CONF_UPDATE_INTERVAL,
+    CONF_INVERT_POWER,
+    CONF_SWAP_IMPORT_EXPORT,
     CONNECTION_TYPE_SERIAL,
     DEFAULT_BAUDRATE,
     DEFAULT_BYTESIZE,
@@ -75,7 +77,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hub.client,
         config[CONF_SLAVE_ID],
         selected_registers,
-        timedelta(seconds=update_interval)
+        timedelta(seconds=update_interval),
+        invert_power=entry.options.get(CONF_INVERT_POWER, False),
+        swap_import_export=entry.options.get(CONF_SWAP_IMPORT_EXPORT, False),
     )
     # Store config and hub_key for unload cleanup
     coordinator.config = config

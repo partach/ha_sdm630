@@ -53,6 +53,15 @@ Let the install config of the integration guide you as it asks you for the neede
   <em>Serial Example, choose the settings you need</em>
 </p>
 
+### Options (after setup)
+Open the integration and click **Configure** to change:
+- **Register set**: basic, basic plus or full.
+- **Update interval**: polling time in seconds (5 to 300).
+- **Invert power sign**: use this if the meter shows negative power while it is drawing power (in/out wires or clamps swapped). Phase and total power are multiplied by -1.
+- **Swap import and export counters**: for the same wiring problem, report the meter's export counters as import and the other way round.
+
+Changing the swap option makes the import and export sensors jump to each other's values. Home Assistant records that jump in its long-term statistics, so if one of those sensors is already in the Energy dashboard, fix the spike in **Developer Tools > Statistics** or keep using the counter you already had and turn only *Invert power sign* on.
+
 ## Discussion 
 See [here](https://github.com/partach/ha_sdm630/discussions)
 

@@ -8,6 +8,8 @@ import asyncio
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from pymodbus.exceptions import ModbusException, ConnectionException
 
+from .const import IMPORT_EXPORT_PAIRS, INVERTIBLE_POWER_KEYS
+
 _LOGGER = logging.getLogger(__name__)
 
 # Reduce noise from pymodbus
@@ -16,7 +18,16 @@ logging.getLogger("pymodbus").setLevel(logging.CRITICAL)
 logging.getLogger("pymodbus.logging").setLevel(logging.CRITICAL)
 
 class HA_SDM630Coordinator(DataUpdateCoordinator):
-    def __init__(self, hass, client, slave_id: int, register_map: dict, update_interval: timedelta = timedelta(seconds=10)):
+    def __init__(
+        self,
+        hass,
+        client,
+        slave_id: int,
+        register_map: dict,
+        update_interval: timedelta = timedelta(seconds=10),
+        invert_power: bool = False,
+        swap_import_export: bool = False,
+    ):
         super().__init__(
             hass,
             _LOGGER,
@@ -28,6 +39,8 @@ class HA_SDM630Coordinator(DataUpdateCoordinator):
         self.register_map = register_map
         self._address_groups = self._group_addresses(register_map, max_registers=4)  # Use passed map
         self.update_interval = update_interval
+        self.invert_power = invert_power
+        self.swap_import_export = swap_import_export
 
     def _group_addresses(self, reg_map: dict, max_registers=4) -> Dict[int, list]:
         """Group consecutive register addresses to minimize requests."""
@@ -60,6 +73,23 @@ class HA_SDM630Coordinator(DataUpdateCoordinator):
             groups[current_start] = current_keys
 
         return groups
+
+    def _apply_direction_correction(self, data: dict) -> dict:
+        """Correct readings from a meter whose current direction is reversed."""
+        if self.invert_power:
+            for key in INVERTIBLE_POWER_KEYS:
+                value = data.get(key)
+                if value is not None:
+                    # "+ 0.0" turns -0.0 into 0.0
+                    data[key] = -value + 0.0
+        if self.swap_import_export:
+            for import_key, export_key in IMPORT_EXPORT_PAIRS:
+                if import_key in data or export_key in data:
+                    data[import_key], data[export_key] = (
+                        data.get(export_key),
+                        data.get(import_key),
+                    )
+        return data
 
     async def _async_connect(self) -> bool:
         """Connect to the device."""
@@ -135,7 +165,7 @@ class HA_SDM630Coordinator(DataUpdateCoordinator):
                 # Small delay between requests to allow gateway buffer to clear
                 await asyncio.sleep(0.1)                
         
-            return new_data
+            return self._apply_direction_correction(new_data)
 
         except ConnectionException as err:
             # Force reconnect next time

@@ -33,6 +33,8 @@ from .const import (
     DEFAULT_STOPBITS,
     DEFAULT_TCP_PORT,
     CONF_REGISTER_SET,
+    CONF_INVERT_POWER,
+    CONF_SWAP_IMPORT_EXPORT,
     DEFAULT_REGISTER_SET,
     REGISTER_SET_BASIC,
     REGISTER_SET_BASIC_PLUS,
@@ -318,6 +320,14 @@ class SDM630OptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Coerce(int),
                     vol.Range(min=5, max=300),  # 5 seconds to 5 minutes
                 ),
+                vol.Required(
+                    CONF_INVERT_POWER,
+                    default=self.config_entry.options.get(CONF_INVERT_POWER, False),
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_SWAP_IMPORT_EXPORT,
+                    default=self.config_entry.options.get(CONF_SWAP_IMPORT_EXPORT, False),
+                ): selector.BooleanSelector(),
             }
         )
 
